@@ -10,30 +10,31 @@ import LoomDetailPage from "@/pages/LoomDetailPage";
 import ProductionEntriesPage from "@/pages/ProductionEntriesPage";
 import FactoryFloorPage from "@/pages/FactoryFloorPage";
 import CeoVisitMobilePage from "@/pages/ceo/CeoVisitMobilePage";
-import DailyReportPage from "@/pages/DailyReportPage";
-import AlertsPage from "@/pages/AlertsPage";
-import PlanningPage from "@/pages/PlanningPage";
-import TargetsPage from "@/pages/TargetsPage";
-import StoppagesPage from "@/pages/StoppagesPage";
-import QualityPage from "@/pages/QualityPage";
-import YarnPage from "@/pages/YarnPage";
-import BeamsPage from "@/pages/BeamsPage";
-import GreigePage from "@/pages/GreigePage";
-import InventoryPage from "@/pages/InventoryPage";
-import SparesPage from "@/pages/SparesPage";
-import RequisitionsPage from "@/pages/RequisitionsPage";
-import PurchaseOrdersPage from "@/pages/PurchaseOrdersPage";
-import GrnPage from "@/pages/GrnPage";
-import SuppliersPage from "@/pages/SuppliersPage";
-import CustomersPage from "@/pages/CustomersPage";
-import SalesOrdersPage from "@/pages/SalesOrdersPage";
-import DispatchPage from "@/pages/DispatchPage";
-import RequestsPage from "@/pages/maintenance/RequestsPage";
+import DailyReportPage from "@/pages/executive/DailyReportPage";
+import AlertsPage from "@/pages/executive/AlertsPage";
+import PlanningPage from "@/pages/production/PlanningPage";
+import TargetsPage from "@/pages/production/TargetsPage";
+import StoppagesPage from "@/pages/production/StoppagesPage";
+import QualityPage from "@/pages/quality/QualityPage";
+import YarnPage from "@/pages/inventory/YarnPage";
+import BeamsPage from "@/pages/inventory/BeamsPage";
+import GreigePage from "@/pages/inventory/GreigePage";
+import InventoryPage from "@/pages/inventory/InventoryPage";
+import SparesPage from "@/pages/inventory/SparesPage";
+import PurchaseRequisitionsPage from "@/pages/purchase/PurchaseRequisitionsPage";
+import PurchaseOrdersPage from "@/pages/purchase/PurchaseOrdersPage";
+import GrnPage from "@/pages/purchase/GrnPage";
+import SuppliersPage from "@/pages/purchase/SuppliersPage";
+import CustomersPage from "@/pages/sales/CustomersPage";
+import SalesOrdersPage from "@/pages/sales/SalesOrdersPage";
+import DispatchPage from "@/pages/sales/DispatchPage";
+import MaintenanceRequestsPage from "@/pages/maintenance/MaintenanceRequestsPage";
 import WorkOrdersPage from "@/pages/maintenance/WorkOrdersPage";
 import PmPage from "@/pages/maintenance/PmPage";
-import EmployeesPage from "@/pages/EmployeesPage";
-import AttendancePage from "@/pages/AttendancePage";
-import CostingPage from "@/pages/CostingPage";
+import EmployeesPage from "@/pages/hr/EmployeesPage";
+import AttendancePage from "@/pages/hr/AttendancePage";
+import CostingPage from "@/pages/finance/CostingPage";
+import AccountsPage from "@/pages/finance/AccountsPage";
 import ReceivablesPage from "@/pages/ReceivablesPage";
 import PayablesPage from "@/pages/PayablesPage";
 import VisitorsPage from "@/pages/security/VisitorsPage";
@@ -42,19 +43,18 @@ import GatePassPage from "@/pages/security/GatePassPage";
 import VehiclesPage from "@/pages/security/VehiclesPage";
 import MaterialGatePage from "@/pages/security/MaterialGatePage";
 import IncidentsPage from "@/pages/security/IncidentsPage";
-import ReportsPage from "@/pages/ReportsPage";
-import NotificationsPage from "@/pages/NotificationsPage";
-import ApprovalsPage from "@/pages/ApprovalsPage";
-import DocumentsPage from "@/pages/DocumentsPage";
-import SearchPage from "@/pages/SearchPage";
-import SettingsPage from "@/pages/SettingsPage";
-import AuditPage from "@/pages/AuditPage";
+import ReportsPage from "@/pages/system/ReportsPage";
+import NotificationsPage from "@/pages/system/NotificationsPage";
+import ApprovalsPage from "@/pages/system/ApprovalsPage";
+import DocumentsPage from "@/pages/system/DocumentsPage";
+import SearchPage from "@/pages/system/SearchPage";
+import SettingsPage from "@/pages/system/SettingsPage";
+import AuditPage from "@/pages/system/AuditPage";
 import { isSupabaseConfigured } from "@/lib/env";
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading, demoMode } = useAuth();
   if (loading) return <LoadingState label="Starting OPA ERP…" />;
-  // Allow app when Demo Mode or authenticated session
   if (!session && isSupabaseConfigured() && !demoMode) {
     return <Navigate to="/login" replace />;
   }
@@ -89,19 +89,20 @@ export default function App() {
         <Route path="greige" element={<GreigePage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="spares" element={<SparesPage />} />
-        <Route path="requisitions" element={<RequisitionsPage />} />
+        <Route path="requisitions" element={<PurchaseRequisitionsPage />} />
         <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="grn" element={<GrnPage />} />
         <Route path="suppliers" element={<SuppliersPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="orders" element={<SalesOrdersPage />} />
         <Route path="dispatch" element={<DispatchPage />} />
-        <Route path="maintenance/requests" element={<RequestsPage />} />
+        <Route path="maintenance/requests" element={<MaintenanceRequestsPage />} />
         <Route path="maintenance/work-orders" element={<WorkOrdersPage />} />
         <Route path="maintenance/pm" element={<PmPage />} />
         <Route path="employees" element={<EmployeesPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="costing" element={<CostingPage />} />
+        <Route path="accounts" element={<AccountsPage />} />
         <Route path="receivables" element={<ReceivablesPage />} />
         <Route path="payables" element={<PayablesPage />} />
         <Route path="security/visitors" element={<VisitorsPage />} />

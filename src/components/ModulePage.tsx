@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { insertRow, listRows, type Row } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -41,6 +41,8 @@ type Props = {
   /** Hide create when false; defaults to permission check */
   allowCreate?: boolean;
   readOnly?: boolean;
+  /** Optional content below the page header (e.g. alert banners). */
+  banner?: ReactNode | ((rows: Row[]) => ReactNode);
 };
 
 export function ModulePage({
@@ -57,6 +59,7 @@ export function ModulePage({
   schema,
   allowCreate,
   readOnly = false,
+  banner,
 }: Props) {
   const { profile, demoMode, can } = useAuth();
   const canCreate =
@@ -185,6 +188,8 @@ export function ModulePage({
           ) : null
         }
       />
+
+      {typeof banner === "function" ? banner(rows) : banner}
 
       <section className="panel table-panel">
         {loading ? <LoadingState /> : null}

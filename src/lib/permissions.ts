@@ -2,13 +2,16 @@ import type { OpaRole } from "@/types/database";
 
 export const ROLES: OpaRole[] = [
   "SUPER_ADMIN",
+  "ADMIN",
   "CEO",
   "DIRECTOR",
   "FACTORY_MANAGER",
+  "PRODUCTION_HEAD",
   "PRODUCTION_MANAGER",
   "PRODUCTION_SUPERVISOR",
   "LOOM_OPERATOR",
   "MAINTENANCE_HEAD",
+  "MAINTENANCE_ENGINEER",
   "TECHNICIAN",
   "STORE_MANAGER",
   "PURCHASE_MANAGER",
@@ -18,6 +21,7 @@ export const ROLES: OpaRole[] = [
   "SECURITY_HEAD",
   "SECURITY_GUARD",
   "QUALITY_MANAGER",
+  "VIEWER",
 ];
 
 export const MODULE_KEYS = [
@@ -94,9 +98,18 @@ export const DEFAULT_MODULE_ACCESS: Record<
   Record<ModuleKey, ModuleAccess>
 > = {
   SUPER_ADMIN: allModules(full),
+  ADMIN: allModules(full),
   CEO: allModules({ ...full, delete: false }),
   DIRECTOR: allModules({ ...full, delete: false }),
   FACTORY_MANAGER: allModules({ ...full, delete: false }),
+  PRODUCTION_HEAD: {
+    ...allModules(viewOnly),
+    dashboard: full,
+    production: full,
+    looms: full,
+    quality: { ...viewOnly, create: true, edit: true },
+    reports: { ...viewOnly, export: true },
+  },
   PRODUCTION_MANAGER: {
     ...allModules(viewOnly),
     dashboard: full,
@@ -119,6 +132,12 @@ export const DEFAULT_MODULE_ACCESS: Record<
     ...allModules(viewOnly),
     maintenance: full,
     looms: { ...viewOnly, edit: true },
+  },
+  MAINTENANCE_ENGINEER: {
+    ...allModules(none),
+    maintenance: { ...viewOnly, create: true, edit: true },
+    looms: viewOnly,
+    inventory: viewOnly,
   },
   TECHNICIAN: {
     ...allModules(none),
@@ -167,6 +186,7 @@ export const DEFAULT_MODULE_ACCESS: Record<
     production: viewOnly,
     dashboard: viewOnly,
   },
+  VIEWER: allModules(viewOnly),
 };
 
 export function hasPermission(
@@ -176,7 +196,7 @@ export function hasPermission(
   overrides?: Partial<Record<ModuleKey, Partial<ModuleAccess>>>,
 ): boolean {
   if (!role) return false;
-  if (role === "SUPER_ADMIN") return true;
+  if (role === "SUPER_ADMIN" || role === "ADMIN") return true;
   const base = DEFAULT_MODULE_ACCESS[role]?.[module];
   const merged = { ...base, ...overrides?.[module] };
   return Boolean(merged?.[action]);

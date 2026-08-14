@@ -33,6 +33,7 @@ import DispatchPage from "@/pages/sales/DispatchPage";
 import MaintenanceRequestsPage from "@/pages/maintenance/MaintenanceRequestsPage";
 import WorkOrdersPage from "@/pages/maintenance/WorkOrdersPage";
 import PmPage from "@/pages/maintenance/PmPage";
+import BreakdownAnalyticsPage from "@/pages/maintenance/BreakdownAnalyticsPage";
 import EmployeesPage from "@/pages/hr/EmployeesPage";
 import AttendancePage from "@/pages/hr/AttendancePage";
 import CostingPage from "@/pages/finance/CostingPage";
@@ -46,6 +47,7 @@ import DocumentsPage from "@/pages/system/DocumentsPage";
 import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
 import AuditPage from "@/pages/system/AuditPage";
+import RolesPage from "@/pages/system/RolesPage";
 
 /* Existing Security module — do not remove */
 import { SecurityDashboard } from "@/modules/security/SecurityDashboard";
@@ -150,6 +152,7 @@ export default function App() {
         <Route path="maintenance/requests" element={<MaintenanceRequestsPage />} />
         <Route path="maintenance/work-orders" element={<WorkOrdersPage />} />
         <Route path="maintenance/pm" element={<PmPage />} />
+        <Route path="maintenance/breakdown" element={<BreakdownAnalyticsPage />} />
         <Route path="employees" element={<EmployeesPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="costing" element={<CostingPage />} />
@@ -179,6 +182,7 @@ export default function App() {
         <Route path="security/settings" element={<SecuritySettingsPage />} />
 
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="roles" element={<RolesPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="documents" element={<DocumentsPage />} />

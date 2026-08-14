@@ -1,10 +1,12 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import type { ModuleKey } from "@/lib/permissions";
 
 export type NavItem = { to: string; label: string; module: ModuleKey };
 export type NavGroup = { id: string; label: string; items: NavItem[] };
+
+const UNREAD_DEMO = 3;
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -33,8 +35,8 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "materials",
     label: "Materials",
     items: [
-      { to: "/yarn", label: "Yarn", module: "yarn" },
-      { to: "/beams", label: "Beams", module: "inventory" },
+      { to: "/yarn", label: "Yarn Store", module: "yarn" },
+      { to: "/beams", label: "Beam Store", module: "inventory" },
       { to: "/greige", label: "Greige", module: "inventory" },
       { to: "/inventory", label: "Inventory", module: "inventory" },
       { to: "/spares", label: "Spares", module: "inventory" },
@@ -66,6 +68,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/maintenance/requests", label: "Requests", module: "maintenance" },
       { to: "/maintenance/work-orders", label: "Work Orders", module: "maintenance" },
       { to: "/maintenance/pm", label: "PM", module: "maintenance" },
+      { to: "/maintenance/breakdown", label: "Breakdown", module: "maintenance" },
     ],
   },
   {
@@ -106,6 +109,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "System",
     items: [
       { to: "/reports", label: "Reports", module: "reports" },
+      { to: "/roles", label: "Roles", module: "settings" },
       { to: "/notifications", label: "Notifications", module: "notifications" },
       { to: "/approvals", label: "Approvals", module: "approvals" },
       { to: "/documents", label: "Documents", module: "documents" },
@@ -128,6 +132,8 @@ export function AppShell() {
       items: group.items.filter((item) => can(item.module, "view")),
     })).filter((group) => group.items.length > 0);
   }, [can]);
+
+  const showNotifications = can("notifications", "view");
 
   return (
     <div className={`app-shell${open ? " nav-open" : ""}`}>
@@ -216,6 +222,26 @@ export function AppShell() {
       </aside>
 
       <main className="main">
+        <div className="shell-topbar">
+          <div className="shell-topbar-meta">
+            <span className="muted">OPA Air Jet ERP</span>
+            {demoMode ? <span className="live-chip">Demo</span> : null}
+          </div>
+          <div className="shell-topbar-actions">
+            {showNotifications ? (
+              <Link to="/notifications" className="notif-link" title="Notifications">
+                <span>Alerts</span>
+                <span className="notif-badge" aria-label={`${UNREAD_DEMO} unread`}>
+                  {UNREAD_DEMO}
+                </span>
+              </Link>
+            ) : null}
+            <div className="user-chip shell-user-chip">
+              <strong>{profile?.full_name ?? "Guest"}</strong>
+              <span>{profile?.role?.replace(/_/g, " ") ?? "—"}</span>
+            </div>
+          </div>
+        </div>
         <Outlet />
       </main>
     </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDemoRows } from "@/lib/demoData";
 import { useAuth } from "@/context/AuthContext";
-import { PageHeader, TextInput } from "@/components/ui";
+import { PageHeader, TextInput, AlertBanner } from "@/components/ui";
 
 type Hit = {
   id: string;
@@ -24,9 +24,33 @@ const SOURCES: Array<{
     table: "opa_looms",
     entity: "Loom",
     to: (id) => `/looms/${id}`,
-    title: (r) => String(r.loom_number ?? r.id),
-    subtitle: (r) => `${r.loom_type ?? ""} · ${r.status ?? ""}`,
-    keys: ["loom_number", "status", "location", "current_article"],
+    title: (r) => String(r.loom_code ?? r.loom_number ?? r.id),
+    subtitle: (r) => `${r.loom_type ?? ""} · ${r.status ?? ""} · ${r.location ?? ""}`,
+    keys: ["loom_number", "loom_code", "status", "location", "current_article", "loom_type"],
+  },
+  {
+    table: "opa_inventory_items",
+    entity: "Item",
+    to: () => "/inventory",
+    title: (r) => String(r.item_code ?? r.name ?? r.id),
+    subtitle: (r) => `${r.name ?? ""} · ${r.category ?? ""} · qty ${r.current_qty ?? "—"}`,
+    keys: ["item_code", "name", "category"],
+  },
+  {
+    table: "opa_yarn_master",
+    entity: "Yarn",
+    to: () => "/yarn",
+    title: (r) => String(r.yarn_code ?? r.name ?? r.id),
+    subtitle: (r) => `${r.name ?? ""} · ${r.count ?? ""} · ${r.blend ?? ""}`,
+    keys: ["yarn_code", "name", "count", "blend", "color"],
+  },
+  {
+    table: "opa_beams",
+    entity: "Beam",
+    to: () => "/beams",
+    title: (r) => String(r.beam_number ?? r.id),
+    subtitle: (r) => `${r.status ?? ""} · ${r.length_meters ?? "—"} M`,
+    keys: ["beam_number", "status"],
   },
   {
     table: "opa_customers",
@@ -57,7 +81,7 @@ const SOURCES: Array<{
     entity: "Visitor",
     to: () => "/security/visitors",
     title: (r) => String(r.full_name ?? r.visitor_code),
-    subtitle: (r) => String(r.company ?? r.mobile ?? ""),
+    subtitle: (r) => `${r.visitor_code ?? ""} · ${r.company ?? ""} · ${r.mobile ?? ""}`,
     keys: ["full_name", "visitor_code", "company", "mobile"],
   },
   {
@@ -86,13 +110,15 @@ const SOURCES: Array<{
   },
 ];
 
+const QUICK = ["D01", "P10", "YARN", "PO", "VIS-001", "Amit"];
+
 export default function SearchPage() {
   const { demoMode } = useAuth();
   const [q, setQ] = useState("");
 
   const hits = useMemo(() => {
     const query = q.trim().toLowerCase();
-    if (query.length < 2) return [] as Hit[];
+    if (query.length < 1) return [] as Hit[];
     const out: Hit[] = [];
     for (const src of SOURCES) {
       const rows = getDemoRows(src.table);
@@ -108,30 +134,51 @@ export default function SearchPage() {
         });
       }
     }
-    return out.slice(0, 40);
+    return out.slice(0, 50);
   }, [q]);
 
   return (
     <>
       <PageHeader
-        title="Search"
-        subtitle="Global search across looms, partners, documents and visits."
+        title="Global Search"
+        subtitle="Find looms (D01–D36 / P01–P36), items, POs, visitors and more."
         meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
       />
+
       <section className="panel page-card">
         <TextInput
           label="Search"
-          placeholder="Try loom, customer, PO, visitor…"
+          placeholder="Try D01, yarn, PO number, VIS-001…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoFocus
         />
+        <div className="search-quick" style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          {QUICK.map((term) => (
+            <button
+              key={term}
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setQ(term)}
+            >
+              {term}
+            </button>
+          ))}
+        </div>
       </section>
+
+      {!q.trim() ? (
+        <AlertBanner tone="info" title="Tips">
+          Search demo looms by code (D01, P36), inventory item codes, purchase order numbers, or
+          visitor labels such as VIS-001 / company name.
+        </AlertBanner>
+      ) : null}
+
       <section className="panel table-panel">
-        {q.trim().length < 2 ? (
-          <p className="muted">Type at least 2 characters.</p>
+        {!q.trim() ? (
+          <p className="muted">Start typing to search across ERP entities.</p>
         ) : hits.length === 0 ? (
-          <p className="muted">No matches.</p>
+          <p className="muted">No matches for “{q.trim()}”.</p>
         ) : (
           <ul className="search-results">
             {hits.map((h) => (

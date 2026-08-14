@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { LoadingState } from "@/components/ui";
+import { isSupabaseConfigured as isErpSupabaseConfigured } from "@/lib/env";
+
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoomsPage from "@/pages/LoomsPage";
@@ -37,12 +39,6 @@ import CostingPage from "@/pages/finance/CostingPage";
 import AccountsPage from "@/pages/finance/AccountsPage";
 import ReceivablesPage from "@/pages/ReceivablesPage";
 import PayablesPage from "@/pages/PayablesPage";
-import VisitorsPage from "@/pages/security/VisitorsPage";
-import CeoVisitsPage from "@/pages/security/CeoVisitsPage";
-import GatePassPage from "@/pages/security/GatePassPage";
-import VehiclesPage from "@/pages/security/VehiclesPage";
-import MaterialGatePage from "@/pages/security/MaterialGatePage";
-import IncidentsPage from "@/pages/security/IncidentsPage";
 import ReportsPage from "@/pages/system/ReportsPage";
 import NotificationsPage from "@/pages/system/NotificationsPage";
 import ApprovalsPage from "@/pages/system/ApprovalsPage";
@@ -50,12 +46,64 @@ import DocumentsPage from "@/pages/system/DocumentsPage";
 import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
 import AuditPage from "@/pages/system/AuditPage";
-import { isSupabaseConfigured } from "@/lib/env";
+
+/* Existing Security module — do not remove */
+import { SecurityDashboard } from "@/modules/security/SecurityDashboard";
+import { VisitorRequestsPage } from "@/modules/security/VisitorRequestsPage";
+import { CeoVisitRequestsPage } from "@/modules/security/CeoVisitRequestsPage";
+import {
+  GatePassPage,
+  VisitorHistoryPage,
+  VisitorsInsidePage,
+} from "@/modules/security/GateAndHistory";
+import {
+  MaterialGatePage,
+  SecurityIncidentsPage,
+  VehicleManagementPage,
+} from "@/modules/security/VehiclesMaterialIncidents";
+import {
+  NotificationsPage as SecurityNotificationsPage,
+  SecurityReportsPage,
+  SecuritySettingsPage,
+} from "@/modules/security/ReportsNotifications";
+import { CeoApprovalPage } from "@/modules/ceo/CeoApprovalPage";
+import { LoginPage as SecurityLoginPage } from "@/modules/security/LoginPage";
+
+const SECURITY_NAV: Record<string, string> = {
+  dashboard: "/security",
+  visitors: "/security/visitors",
+  "ceo-visits": "/security/ceo-visits",
+  "gate-pass": "/security/gate-pass",
+  inside: "/security/inside",
+  history: "/security/history",
+  vehicles: "/security/vehicles",
+  "material-gate": "/security/material-gate",
+  incidents: "/security/incidents",
+  reports: "/security/reports",
+  notifications: "/security/notifications",
+  settings: "/security/settings",
+};
+
+function SecurityNav({
+  children,
+}: {
+  children: (nav: (id: string) => void) => ReactNode;
+}) {
+  const navigate = useNavigate();
+  return (
+    <>
+      {children((id) => {
+        const path = SECURITY_NAV[id] ?? `/security/${id}`;
+        navigate(path);
+      })}
+    </>
+  );
+}
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading, demoMode } = useAuth();
   if (loading) return <LoadingState label="Starting OPA ERP…" />;
-  if (!session && isSupabaseConfigured() && !demoMode) {
+  if (!session && isErpSupabaseConfigured() && !demoMode) {
     return <Navigate to="/login" replace />;
   }
   return children;
@@ -65,7 +113,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/security/login" element={<SecurityLoginPage />} />
       <Route path="/ceo/visit/:token" element={<CeoVisitMobilePage />} />
+      <Route path="/ceo/approve/:token" element={<CeoApprovalPage />} />
+
       <Route
         element={
           <Protected>
@@ -105,12 +156,28 @@ export default function App() {
         <Route path="accounts" element={<AccountsPage />} />
         <Route path="receivables" element={<ReceivablesPage />} />
         <Route path="payables" element={<PayablesPage />} />
-        <Route path="security/visitors" element={<VisitorsPage />} />
-        <Route path="security/ceo-visits" element={<CeoVisitsPage />} />
+
+        {/* Existing Security module routes */}
+        <Route
+          path="security"
+          element={
+            <SecurityNav>
+              {(nav) => <SecurityDashboard onNavigate={nav} />}
+            </SecurityNav>
+          }
+        />
+        <Route path="security/visitors" element={<VisitorRequestsPage />} />
+        <Route path="security/ceo-visits" element={<CeoVisitRequestsPage />} />
         <Route path="security/gate-pass" element={<GatePassPage />} />
-        <Route path="security/vehicles" element={<VehiclesPage />} />
+        <Route path="security/inside" element={<VisitorsInsidePage />} />
+        <Route path="security/history" element={<VisitorHistoryPage />} />
+        <Route path="security/vehicles" element={<VehicleManagementPage />} />
         <Route path="security/material-gate" element={<MaterialGatePage />} />
-        <Route path="security/incidents" element={<IncidentsPage />} />
+        <Route path="security/incidents" element={<SecurityIncidentsPage />} />
+        <Route path="security/reports" element={<SecurityReportsPage />} />
+        <Route path="security/notifications" element={<SecurityNotificationsPage />} />
+        <Route path="security/settings" element={<SecuritySettingsPage />} />
+
         <Route path="reports" element={<ReportsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
@@ -118,8 +185,8 @@ export default function App() {
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

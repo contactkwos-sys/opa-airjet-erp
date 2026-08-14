@@ -1,52 +1,58 @@
 # OPA Group of India — Air Jet Loom ERP
 
-Vite + React 19 + TypeScript frontend for the OPA air jet loom plant ERP. Uses the existing teal/steel industrial theme (Syne + Outfit) and connects to Supabase (`opa_*` tables).
+Production ERP for **72 Air Jet Looms** (36 Dobby + 36 Plain), integrating production, inventory, purchase, maintenance, sales, HR, finance, reports, and the existing **Security + Visitor + CEO WhatsApp** module.
 
-## Features
-
-- Auth with Supabase session + `opa_profiles` (role-aware permissions)
-- **Demo Mode** when `VITE_SUPABASE_ANON_KEY` is empty — SUPER_ADMIN preview without remote auth
-- Executive dashboard (fleet KPIs, production, charts, alerts)
-- Full CRUD shells for **Looms** and **Production Entries**; factory floor board (72 looms)
-- Module pages for materials, purchase, sales, maintenance, HR, finance, security, system
-- Public CEO visit mobile route: `/ceo/visit/:token`
-- Audit helper writing to `opa_audit_logs`
-
-## Setup
+## Quick start
 
 ```bash
 npm install
 cp .env.example .env
-```
-
-Edit `.env`:
-
-```
-VITE_SUPABASE_URL=https://ixulyhomqtajenigopai.supabase.co
-VITE_SUPABASE_ANON_KEY=your_publishable_or_anon_key
-```
-
-Use the **anon / publishable** key only. Never put the service role key in the frontend.
-
-Leave `VITE_SUPABASE_ANON_KEY` empty to run in Demo Mode (local UI preview with mock fleet data).
-
-## Develop
-
-```bash
 npm run dev
 ```
 
-## Build
+Without Supabase credentials the app runs in **Demo Mode** (ERP) / **local store** (Security) so workflows can be exercised without a live database.
+
+## Environment
+
+### Frontend (`VITE_*` only)
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Publishable / anon key |
+| `VITE_APP_BASE_URL` | Public app URL for links |
+
+### Server-side (Edge Function secrets — never in frontend)
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role |
+| `WHATSAPP_API_URL` | Meta Graph API base |
+| `WHATSAPP_ACCESS_TOKEN` | WhatsApp Cloud API token |
+| `WHATSAPP_PHONE_NUMBER_ID` | Phone number ID |
+| `CEO_WHATSAPP_NUMBER` | CEO WhatsApp (e.g. `9198…`) |
+| `CEO_APPROVAL_TOKEN_SECRET` | Signed approval link secret |
+| `APP_BASE_URL` | Public ERP URL |
+
+### Migrations
 
 ```bash
-npm run build
-npm run preview
+# Requires DATABASE_URL (IPv4 pooler) or SUPABASE_ACCESS_TOKEN
+npm run db:migrate
 ```
 
-## Path alias
+Apply Security first, then ERP (`opa_*`) migrations under `supabase/migrations/`.
 
-`@/` maps to `src/` (configured in `vite.config.ts` and `tsconfig.app.json`).
+## Scripts
 
-## Supabase
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Typecheck + production build |
+| `npm run db:migrate` | Apply SQL migrations |
+| `npm run test:security` | Security smoke tests |
 
-SQL migrations live under `supabase/migrations/`. Apply them to your project before connecting the app for live data.
+## Docs
+
+- `docs/SECURITY_MODULE.md` — Visitor / CEO WhatsApp / Gate Pass
+- `docs/FINAL_REPORT.md` — Implementation report

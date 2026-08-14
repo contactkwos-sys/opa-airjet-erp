@@ -1,231 +1,149 @@
-// Supabase Edge Function: whatsapp-notify
-// Sends CEO visit approval WhatsApp messages with approve/reject/reschedule links.
-// Secrets (never logged): WHATSAPP_API_TOKEN, WHATSAPP_PHONE_NUMBER_ID, CEO_WHATSAPP_NUMBER
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-type VisitPayload = {
-  request_id: string;
-  visitor_name?: string;
-  visitor_company?: string;
-  purpose?: string;
-  host_name?: string;
-  proposed_visit_at?: string;
-  proposed_times?: string[];
-  action_base_url?: string;
-};
-
-function requiredEnv(name: string): string {
-  const value = Deno.env.get(name);
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-function buildActionLinks(
-  baseUrl: string,
-  requestId: string,
-  token: string,
-): { approve: string; reject: string; reschedule: string } {
-  const root = baseUrl.replace(/\/$/, "");
-  const q = `request_id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(token)}`;
-  return {
-    approve: `${root}/approve?${q}`,
-    reject: `${root}/reject?${q}`,
-    reschedule: `${root}/reschedule?${q}`,
-  };
-}
+import {
+  buildCeoMessage,
+  corsHeaders,
+  randomToken,
+  sha256,
+} from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
+  const headers = corsHeaders(req.headers.get("origin"));
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers });
   }
 
   try {
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const { ceo_request_id } = await req.json();
+    if (!ceo_request_id) {
+      return json({ error: "ceo_request_id required" }, 400, headers);
     }
 
-    const token = requiredEnv("WHATSAPP_API_TOKEN");
-    const phoneNumberId = requiredEnv("WHATSAPP_PHONE_NUMBER_ID");
-    const ceoNumber = requiredEnv("CEO_WHATSAPP_NUMBER");
-    const supabaseUrl = requiredEnv("SUPABASE_URL");
-    const serviceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(supabaseUrl, serviceKey);
 
-    const body = (await req.json()) as VisitPayload;
-    if (!body.request_id) {
-      return new Response(JSON.stringify({ error: "request_id is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const { data: ceo, error: ceoErr } = await admin
+      .from("ceo_visit_requests")
+      .select("*, visitor:visitor_requests(*)")
+      .eq("id", ceo_request_id)
+      .single();
+    if (ceoErr || !ceo) {
+      return json({ error: "CEO request not found" }, 404, headers);
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const visitor = ceo.visitor;
+    if (!visitor) {
+      return json({ error: "Visitor request missing" }, 404, headers);
+    }
 
-    const actionToken = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    const whatsappUrl = Deno.env.get("WHATSAPP_API_URL");
+    const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+    const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+    const ceoWhatsapp = Deno.env.get("CEO_WHATSAPP_NUMBER");
+    const tokenSecret = Deno.env.get("CEO_APPROVAL_TOKEN_SECRET") || "dev-secret";
+    const appBase =
+      Deno.env.get("APP_BASE_URL") || Deno.env.get("VITE_APP_BASE_URL") || "";
 
-    const { data: visit, error: visitErr } = await supabase
-      .from("opa_ceo_visit_requests")
+    if (!whatsappUrl || !accessToken || !phoneNumberId || !ceoWhatsapp || !appBase) {
+      await admin
+        .from("ceo_visit_requests")
+        .update({ whatsapp_status: "PENDING_CONFIGURATION", updated_at: new Date().toISOString() })
+        .eq("id", ceo_request_id);
+
+      return json({
+        status: "PENDING_CONFIGURATION",
+        message: "WhatsApp Pending Configuration",
+      }, 200, headers);
+    }
+
+    const rawToken = randomToken(24);
+    const tokenHash = await sha256(`${tokenSecret}:${rawToken}:${ceo_request_id}`);
+    const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+
+    await admin
+      .from("ceo_visit_requests")
       .update({
-        action_token: actionToken,
-        action_token_expires_at: expiresAt,
-        status: "PENDING",
+        approval_token_hash: tokenHash,
+        token_expires_at: expires,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", body.request_id)
-      .select("*")
-      .single();
+      .eq("id", ceo_request_id);
 
-    if (visitErr || !visit) {
-      return new Response(
-        JSON.stringify({ error: "Visit request not found", detail: visitErr?.message }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+    const base = `${appBase.replace(/\/$/, "")}/ceo-approval/${ceo_request_id}`;
+    const approval_link = `${base}?token=${rawToken}&action=APPROVE`;
+    const rejection_link = `${base}?token=${rawToken}&action=REJECT`;
+    const reschedule_link = `${base}?token=${rawToken}&action=RESCHEDULE`;
+
+    let securityUser = "Security";
+    if (visitor.created_by) {
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("full_name")
+        .eq("id", visitor.created_by)
+        .maybeSingle();
+      if (profile?.full_name) securityUser = profile.full_name;
     }
 
-    const actionBase =
-      body.action_base_url ||
-      Deno.env.get("CEO_VISIT_ACTION_BASE_URL") ||
-      `${supabaseUrl}/functions/v1/ceo-visit-action`;
+    const bodyText = buildCeoMessage({
+      request_id: visitor.request_number,
+      visitor_name: visitor.visitor_name,
+      company_name: visitor.company_name,
+      mobile: visitor.mobile,
+      purpose: visitor.purpose,
+      date: visitor.requested_date,
+      time: visitor.requested_time,
+      number_of_visitors: visitor.number_of_visitors,
+      security_user: securityUser,
+      approval_link,
+      rejection_link,
+      reschedule_link,
+    });
 
-    const links = buildActionLinks(actionBase, body.request_id, actionToken);
-
-    const visitorName = body.visitor_name || visit.visitor_name || "Visitor";
-    const purpose = body.purpose || visit.purpose || "-";
-    const host = body.host_name || visit.host_name || "-";
-    const when =
-      body.proposed_visit_at ||
-      visit.proposed_visit_at ||
-      (Array.isArray(body.proposed_times) && body.proposed_times[0]) ||
-      "TBD";
-
-    const messageBody = [
-      "OPA Group – CEO Visit Approval",
-      `Visitor: ${visitorName}`,
-      body.visitor_company || visit.visitor_company
-        ? `Company: ${body.visitor_company || visit.visitor_company}`
-        : null,
-      `Host: ${host}`,
-      `Purpose: ${purpose}`,
-      `Proposed: ${when}`,
-      "",
-      `Approve: ${links.approve}`,
-      `Reject: ${links.reject}`,
-      `Reschedule: ${links.reschedule}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    // Queue outbox row (no secrets stored)
-    const { data: outbox, error: outboxErr } = await supabase
-      .from("opa_whatsapp_outbox")
-      .insert({
-        to_number: ceoNumber,
-        template_name: "ceo_visit_approval",
-        message_body: messageBody,
-        payload: {
-          request_id: body.request_id,
-          links: { approve: links.approve, reject: links.reject, reschedule: links.reschedule },
-        },
-        status: "SENDING",
-        related_module: "ceo_visit",
-        related_record_id: body.request_id,
-        attempt_count: 1,
-      })
-      .select("id")
-      .single();
-
-    if (outboxErr) {
-      return new Response(JSON.stringify({ error: "Failed to queue WhatsApp message" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const waUrl = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
-    const waRes = await fetch(waUrl, {
+    const endpoint = `${whatsappUrl.replace(/\/$/, "")}/${phoneNumberId}/messages`;
+    const waRes = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        to: ceoNumber.replace(/\D/g, ""),
+        to: ceoWhatsapp.replace(/\D/g, ""),
         type: "text",
-        text: { body: messageBody, preview_url: true },
+        text: { body: bodyText },
       }),
     });
-
-    const waJson = await waRes.json().catch(() => ({}));
-    // Never log tokens or Authorization headers
 
     if (!waRes.ok) {
-      await supabase
-        .from("opa_whatsapp_outbox")
-        .update({
-          status: "FAILED",
-          last_error: `HTTP ${waRes.status}`,
-        })
-        .eq("id", outbox.id);
-
-      return new Response(
-        JSON.stringify({ error: "WhatsApp send failed", status: waRes.status }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      const errText = await waRes.text();
+      await admin
+        .from("ceo_visit_requests")
+        .update({ whatsapp_status: "FAILED", updated_at: new Date().toISOString() })
+        .eq("id", ceo_request_id);
+      return json({ status: "FAILED", detail: errText }, 200, headers);
     }
 
-    const providerMessageId =
-      waJson?.messages?.[0]?.id ?? waJson?.message_id ?? null;
+    await admin
+      .from("ceo_visit_requests")
+      .update({ whatsapp_status: "SENT", updated_at: new Date().toISOString() })
+      .eq("id", ceo_request_id);
 
-    await supabase
-      .from("opa_whatsapp_outbox")
-      .update({
-        status: "SENT",
-        provider_message_id: providerMessageId,
-        sent_at: new Date().toISOString(),
-      })
-      .eq("id", outbox.id);
-
-    await supabase
-      .from("opa_ceo_visit_requests")
-      .update({ whatsapp_message_id: providerMessageId })
-      .eq("id", body.request_id);
-
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        request_id: body.request_id,
-        outbox_id: outbox.id,
-        provider_message_id: providerMessageId,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    // Do not include env values or tokens in error responses beyond names
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    await admin.from("audit_logs").insert({
+      action: "WhatsApp Notification Sent",
+      module: "security",
+      record_id: ceo_request_id,
+      new_data: { to: ceoWhatsapp, request_number: visitor.request_number },
     });
+
+    return json({ status: "SENT" }, 200, headers);
+  } catch (e) {
+    return json({ error: String(e) }, 500, headers);
   }
 });
+
+function json(body: unknown, status: number, headers: HeadersInit) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...headers, "Content-Type": "application/json" },
+  });
+}

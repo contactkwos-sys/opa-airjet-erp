@@ -10,5 +10,12 @@ export const env = {
 };
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(env.supabaseUrl && env.supabaseAnonKey);
+  const { supabaseUrl, supabaseAnonKey } = env;
+  return Boolean(
+    supabaseUrl &&
+      supabaseAnonKey &&
+      !supabaseUrl.includes("YOUR_PROJECT") &&
+      supabaseAnonKey !== "your_anon_key" &&
+      supabaseAnonKey !== "your_publishable_or_anon_key"
+  );
 }

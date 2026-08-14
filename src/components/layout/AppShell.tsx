@@ -90,12 +90,15 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "security",
     label: "Security",
     items: [
+      { to: "/security", label: "Security Home", module: "security" },
       { to: "/security/visitors", label: "Visitors", module: "security" },
       { to: "/security/ceo-visits", label: "CEO Visits", module: "security" },
       { to: "/security/gate-pass", label: "Gate Pass", module: "security" },
+      { to: "/security/inside", label: "Inside Now", module: "security" },
       { to: "/security/vehicles", label: "Vehicles", module: "security" },
       { to: "/security/material-gate", label: "Material Gate", module: "security" },
       { to: "/security/incidents", label: "Incidents", module: "security" },
+      { to: "/security/reports", label: "Security Reports", module: "security" },
     ],
   },
   {

@@ -560,69 +560,8 @@ CREATE POLICY opa_attendance_all ON opa_attendance
   WITH CHECK (opa_has_permission('hr', 'create') OR opa_has_permission('hr', 'edit') OR opa_is_elevated());
 
 -- ---------------------------------------------------------------------------
--- SECURITY
+-- SECURITY WhatsApp helpers (visitor/CEO/gate tables live in Security module)
 -- ---------------------------------------------------------------------------
-DROP POLICY IF EXISTS opa_visitors_all ON opa_visitors;
-CREATE POLICY opa_visitors_all ON opa_visitors
-  FOR ALL TO authenticated
-  USING (opa_has_permission('security', 'view') OR opa_is_elevated())
-  WITH CHECK (opa_has_permission('security', 'create') OR opa_has_permission('security', 'edit') OR opa_is_elevated());
-
-DROP POLICY IF EXISTS opa_ceo_visit_requests_select ON opa_ceo_visit_requests;
-CREATE POLICY opa_ceo_visit_requests_select ON opa_ceo_visit_requests
-  FOR SELECT TO authenticated
-  USING (
-    opa_has_permission('security', 'view')
-    OR opa_current_role() IN ('CEO'::opa_role, 'DIRECTOR'::opa_role, 'SUPER_ADMIN'::opa_role)
-    OR requested_by = auth.uid()
-    OR opa_is_elevated()
-  );
-
-DROP POLICY IF EXISTS opa_ceo_visit_requests_write ON opa_ceo_visit_requests;
-CREATE POLICY opa_ceo_visit_requests_write ON opa_ceo_visit_requests
-  FOR ALL TO authenticated
-  USING (
-    opa_has_permission('security', 'edit')
-    OR opa_current_role() IN ('CEO'::opa_role, 'SUPER_ADMIN'::opa_role)
-    OR opa_is_elevated()
-  )
-  WITH CHECK (
-    opa_has_permission('security', 'create')
-    OR opa_has_permission('security', 'edit')
-    OR opa_current_role() IN ('CEO'::opa_role, 'SUPER_ADMIN'::opa_role)
-    OR opa_is_elevated()
-  );
-
-DROP POLICY IF EXISTS opa_gate_passes_all ON opa_gate_passes;
-CREATE POLICY opa_gate_passes_all ON opa_gate_passes
-  FOR ALL TO authenticated
-  USING (opa_has_permission('security', 'view') OR opa_is_elevated())
-  WITH CHECK (opa_has_permission('security', 'create') OR opa_has_permission('security', 'edit') OR opa_is_elevated());
-
-DROP POLICY IF EXISTS opa_visitor_checkins_all ON opa_visitor_checkins;
-CREATE POLICY opa_visitor_checkins_all ON opa_visitor_checkins
-  FOR ALL TO authenticated
-  USING (opa_has_permission('security', 'view') OR opa_is_elevated())
-  WITH CHECK (opa_has_permission('security', 'create') OR opa_has_permission('security', 'edit') OR opa_is_elevated());
-
-DROP POLICY IF EXISTS opa_vehicle_entries_all ON opa_vehicle_entries;
-CREATE POLICY opa_vehicle_entries_all ON opa_vehicle_entries
-  FOR ALL TO authenticated
-  USING (opa_has_permission('security', 'view') OR opa_is_elevated())
-  WITH CHECK (opa_has_permission('security', 'create') OR opa_has_permission('security', 'edit') OR opa_is_elevated());
-
-DROP POLICY IF EXISTS opa_material_gate_entries_all ON opa_material_gate_entries;
-CREATE POLICY opa_material_gate_entries_all ON opa_material_gate_entries
-  FOR ALL TO authenticated
-  USING (opa_has_permission('security', 'view') OR opa_is_elevated())
-  WITH CHECK (opa_has_permission('security', 'create') OR opa_has_permission('security', 'edit') OR opa_is_elevated());
-
-DROP POLICY IF EXISTS opa_security_incidents_all ON opa_security_incidents;
-CREATE POLICY opa_security_incidents_all ON opa_security_incidents
-  FOR ALL TO authenticated
-  USING (opa_has_permission('security', 'view') OR opa_is_elevated())
-  WITH CHECK (opa_has_permission('security', 'create') OR opa_has_permission('security', 'edit') OR opa_is_elevated());
-
 DROP POLICY IF EXISTS opa_whatsapp_outbox_select ON opa_whatsapp_outbox;
 CREATE POLICY opa_whatsapp_outbox_select ON opa_whatsapp_outbox
   FOR SELECT TO authenticated
@@ -660,7 +599,8 @@ DECLARE
     'opa_notifications',
     'opa_maintenance_requests',
     'opa_maintenance_work_orders',
-    'opa_ceo_visit_requests',
+    'ceo_visit_requests',
+    'visitor_requests',
     'opa_approvals',
     'opa_whatsapp_outbox'
   ];

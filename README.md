@@ -6,7 +6,8 @@ Production ERP for **72 Air Jet Looms** (36 Dobby + 36 Plain), integrating produ
 
 ```bash
 npm install
-cp .env.example .env
+cp .env.example .env   # set VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY
+npm run supabase:test
 npm run dev
 ```
 
@@ -19,7 +20,8 @@ Without Supabase credentials the app runs in **Demo Mode** (ERP) / **local store
 | Variable | Purpose |
 |----------|---------|
 | `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Publishable / anon key |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable key (preferred) |
+| `VITE_SUPABASE_ANON_KEY` | Optional alias for the publishable key |
 | `VITE_APP_BASE_URL` | Public app URL for links |
 
 ### Server-side (Edge Function secrets — never in frontend)
@@ -37,11 +39,12 @@ Without Supabase credentials the app runs in **Demo Mode** (ERP) / **local store
 ### Migrations
 
 ```bash
+npm run db:plan      # non-destructive plan check (no writes)
 # Requires DATABASE_URL (IPv4 pooler) or SUPABASE_ACCESS_TOKEN
 npm run db:migrate
 ```
 
-Apply Security first, then ERP (`opa_*`) migrations under `supabase/migrations/`.
+See `docs/MIGRATION_PLAN.md`. Apply Security first, then ERP (`opa_*`) migrations under `supabase/migrations/`.
 
 ## Scripts
 
@@ -49,10 +52,13 @@ Apply Security first, then ERP (`opa_*`) migrations under `supabase/migrations/`
 |--------|---------|
 | `npm run dev` | Vite dev server |
 | `npm run build` | Typecheck + production build |
+| `npm run db:plan` | Print/validate migration plan |
 | `npm run db:migrate` | Apply SQL migrations |
+| `npm run supabase:test` | Auth + REST smoke test (publishable key) |
 | `npm run test:security` | Security smoke tests |
 
 ## Docs
 
+- `docs/MIGRATION_PLAN.md` — Migration order, coexistence rules, env matrix
 - `docs/SECURITY_MODULE.md` — Visitor / CEO WhatsApp / Gate Pass
 - `docs/FINAL_REPORT.md` — Implementation report

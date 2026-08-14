@@ -3,10 +3,11 @@
 -- Migration 006: Security integration notes + WhatsApp outbox helpers
 --
 -- IMPORTANT: Do NOT duplicate Security / Visitor / CEO tables.
--- The production Security module (PR #2) owns:
---   profiles, visitor_requests, ceo_visit_requests, visitor_entries,
+-- The production Security module owns:
+--   visitor_requests, ceo_visit_requests, visitor_entries,
 --   security_incidents, vehicle_entries, material_gate_entries,
---   security_notifications, audit_logs
+--   security_notifications, security_audit_logs
+-- ERP auth/roles live in opa_profiles (not shared CRM public.profiles).
 -- See: 20260814000000_security_visitor_module.sql
 -- =============================================================================
 

@@ -133,6 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return createElement(AuthContext.Provider, { value }, children);
 }
 
+const SECURITY_ROLES = new Set([
+  "SUPER_ADMIN",
+  "CEO",
+  "DIRECTOR",
+  "SECURITY_HEAD",
+  "SECURITY_GUARD",
+  "FACTORY_MANAGER",
+]);
+
 async function loadProfile(userId: string, email: string): Promise<Profile> {
   if (!supabase) {
     return {
@@ -143,18 +152,32 @@ async function loadProfile(userId: string, email: string): Promise<Profile> {
       created_at: new Date().toISOString(),
     };
   }
-  const { data } = await supabase
+
+  // Prefer OPA ERP profiles (role-aware). Avoid shared CRM public.profiles.
+  const opa = await supabase
+    .from("opa_profiles")
+    .select("id,email,full_name,role,mobile,created_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (opa.data && SECURITY_ROLES.has(String(opa.data.role))) {
+    return opa.data as Profile;
+  }
+
+  const legacy = await supabase
     .from("profiles")
     .select("id,email,full_name,role,mobile,created_at")
     .eq("id", userId)
     .maybeSingle();
 
-  if (data) return data as Profile;
+  if (legacy.data && SECURITY_ROLES.has(String(legacy.data.role))) {
+    return legacy.data as Profile;
+  }
 
   return {
     id: userId,
     email,
-    full_name: email,
+    full_name: (opa.data?.full_name as string | undefined) || email,
     role: "SECURITY_GUARD",
     created_at: new Date().toISOString(),
   };

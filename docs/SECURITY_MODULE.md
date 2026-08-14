@@ -19,7 +19,8 @@ Without Supabase credentials the module runs in **local browser store mode** so 
 | Variable | Purpose |
 |----------|---------|
 | `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Public anon key |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable key (preferred) |
+| `VITE_SUPABASE_ANON_KEY` | Optional alias for publishable key |
 | `VITE_APP_BASE_URL` | Public app URL used in links |
 
 ### Server-side only (Supabase Edge Function secrets)

@@ -120,21 +120,43 @@ async function applyViaManagementApi(token, files) {
   }
 }
 
+async function assertNonDestructive(files) {
+  const forbidden = [/\bDROP\s+TABLE\b/i, /\bTRUNCATE\b/i, /\bDROP\s+SCHEMA\b/i];
+  for (const file of files) {
+    const sql = await readFile(path.join(MIGRATIONS_DIR, file), "utf8");
+    for (const re of forbidden) {
+      if (re.test(sql)) {
+        fail(
+          `${file} looks destructive (${re}). Refusing to apply. Run npm run db:plan.`,
+        );
+      }
+    }
+  }
+  log("Preflight OK — no DROP TABLE / TRUNCATE / DROP SCHEMA detected");
+}
+
 async function main() {
   const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
   const accessToken = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
-
-  if (!databaseUrl && !accessToken) {
-    fail(
-      "Set DATABASE_URL or SUPABASE_ACCESS_TOKEN before running db:migrate",
-    );
-  }
+  const dryRun = process.argv.includes("--plan") || process.argv.includes("--dry-run");
 
   const files = await listMigrationFiles();
   if (!files.length) {
     fail(`No .sql files found in ${MIGRATIONS_DIR}`);
   }
   log(`Found ${files.length} migration(s): ${files.join(", ")}`);
+  await assertNonDestructive(files);
+
+  if (dryRun) {
+    log("Dry-run only — no SQL executed. See also: npm run db:plan");
+    return;
+  }
+
+  if (!databaseUrl && !accessToken) {
+    fail(
+      "Set DATABASE_URL or SUPABASE_ACCESS_TOKEN before running db:migrate (or pass --plan)",
+    );
+  }
 
   if (databaseUrl) {
     await applyViaPg(databaseUrl, files);

@@ -63,11 +63,11 @@ Apply with: `npm run db:migrate` (needs `DATABASE_URL` or `SUPABASE_ACCESS_TOKEN
 
 ## 10. Environment variables
 
-Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_BASE_URL`  
+Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (preferred; `VITE_SUPABASE_ANON_KEY` alias), `VITE_APP_BASE_URL`  
 Server: `SUPABASE_SERVICE_ROLE_KEY`, `WHATSAPP_*`, `CEO_WHATSAPP_NUMBER`, `CEO_APPROVAL_TOKEN_SECRET`, `APP_BASE_URL`  
 Migrations: `DATABASE_URL` or `SUPABASE_ACCESS_TOKEN`
 
-**Never place service role / WhatsApp tokens in frontend.**
+**Never place service role / WhatsApp tokens / DB password in frontend.**
 
 ## 11. WhatsApp configuration
 
@@ -83,7 +83,9 @@ Documented in `docs/SECURITY_MODULE.md`. If secrets missing, requests save with 
 |-------|--------|
 | `npm run build` | PASS |
 | `npm run test:security` | PASS (`SECURITY SMOKE OK`) |
-| Live Supabase `opa_*` apply | **BLOCKED** — DB host IPv6-only / pooler tenant not reachable from this agent; secrets for Management API not provided |
+| `npm run supabase:test` | PASS (Auth health + login endpoint + REST with publishable key) |
+| `npm run db:plan` | PASS (non-destructive) |
+| Live Supabase `opa_*` apply | **BLOCKED** — DB host IPv6-only / pooler tenant not reachable; needs `DATABASE_URL` or `SUPABASE_ACCESS_TOKEN` |
 | Demo Mode ERP UI | Available without Supabase |
 | Security local-store mode | Available without Supabase |
 

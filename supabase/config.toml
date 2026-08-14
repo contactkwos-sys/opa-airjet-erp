@@ -1,0 +1,12 @@
+{
+  "functions": [
+    {
+      "name": "whatsapp-notify",
+      "verify_jwt": true
+    },
+    {
+      "name": "ceo-decision",
+      "verify_jwt": false
+    }
+  ]
+}

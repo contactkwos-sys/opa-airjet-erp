@@ -83,7 +83,7 @@ export function buildLooms(): Loom[] {
   return looms;
 }
 
-export const navItems = [
+export const loomNavItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "looms", label: "Looms" },
   { id: "production", label: "Production" },
@@ -93,4 +93,26 @@ export const navItems = [
   { id: "security", label: "Security" },
 ] as const;
 
-export type NavId = (typeof navItems)[number]["id"];
+export type LoomNavId = (typeof loomNavItems)[number]["id"];
+
+/** @deprecated use loomNavItems */
+export const navItems = loomNavItems;
+/** @deprecated use LoomNavId */
+export type NavId = LoomNavId;
+
+export const securityNavItems = [
+  { id: "security-dashboard", label: "Dashboard" },
+  { id: "visitor-requests", label: "Visitor Requests" },
+  { id: "ceo-requests", label: "CEO Visiting Requests" },
+  { id: "visitors-inside", label: "Visitors Inside" },
+  { id: "gate-pass", label: "Gate Pass" },
+  { id: "vehicles", label: "Vehicle Management" },
+  { id: "material-gate", label: "Material Gate" },
+  { id: "incidents", label: "Security Incidents" },
+  { id: "history", label: "Visitor History" },
+  { id: "reports", label: "Reports" },
+  { id: "notifications", label: "Notifications" },
+  { id: "settings", label: "Settings" },
+] as const;
+
+export type SecurityNavId = (typeof securityNavItems)[number]["id"];

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { writeAuditLog } from "@/lib/audit";
 import { buildDemoLooms, buildDemoProductionEntries } from "@/lib/demoData";
+import { listRows, toUserError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { OpaLoom, OpaProductionEntry } from "@/types/database";
 import {
@@ -14,6 +15,7 @@ import {
   ErrorState,
   EmptyState,
   StatCard,
+  AlertBanner,
   type Column,
 } from "@/components/ui";
 
@@ -23,6 +25,7 @@ export default function ProductionEntriesPage() {
   const [looms, setLooms] = useState<OpaLoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fromDemo, setFromDemo] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
@@ -46,40 +49,33 @@ export default function ProductionEntriesPage() {
     setLoading(true);
     setError(null);
     const demoLooms = buildDemoLooms();
-    const sb = getSupabase();
-    if (!sb) {
-      setLooms(demoLooms);
-      setEntries(buildDemoProductionEntries(demoLooms));
-      setForm((f) => ({ ...f, loom_id: demoLooms[0]?.id ?? "" }));
-      setLoading(false);
-      return;
-    }
-    try {
-      const [loomRes, entryRes] = await Promise.all([
-        sb.from("opa_looms").select("*").order("loom_number"),
-        sb
-          .from("opa_production_entries")
-          .select("*")
-          .order("entry_date", { ascending: false })
-          .limit(100),
-      ]);
-      const loadedLooms =
-        loomRes.data?.length ? (loomRes.data as OpaLoom[]) : demoLooms;
-      setLooms(loadedLooms);
-      if (entryRes.error) throw entryRes.error;
-      if (entryRes.data?.length) {
-        setEntries(entryRes.data as OpaProductionEntry[]);
-      } else {
-        setEntries(buildDemoProductionEntries(loadedLooms));
-      }
-      setForm((f) => ({ ...f, loom_id: loadedLooms[0]?.id ?? "" }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-      setLooms(demoLooms);
-      setEntries(buildDemoProductionEntries(demoLooms));
-    } finally {
-      setLoading(false);
-    }
+    const [loomRes, entryRes] = await Promise.all([
+      listRows("opa_looms", {
+        orderBy: { column: "loom_number", ascending: true },
+        limit: 200,
+        demoRows: demoLooms as unknown as Array<{ id: string } & Record<string, unknown>>,
+      }),
+      listRows("opa_production_entries", {
+        orderBy: { column: "entry_date", ascending: false },
+        limit: 100,
+        demoRows: buildDemoProductionEntries(demoLooms) as unknown as Array<
+          { id: string } & Record<string, unknown>
+        >,
+      }),
+    ]);
+
+    const loadedLooms = (loomRes.data.length ? loomRes.data : demoLooms) as OpaLoom[];
+    setLooms(loadedLooms);
+    setEntries(
+      (entryRes.data.length
+        ? entryRes.data
+        : buildDemoProductionEntries(loadedLooms)) as OpaProductionEntry[],
+    );
+    setFromDemo(loomRes.fromDemo || entryRes.fromDemo);
+    setForm((f) => ({ ...f, loom_id: loadedLooms[0]?.id ?? "" }));
+    const hardError = [loomRes, entryRes].find((r) => r.error && !r.fromDemo);
+    setError(hardError?.error ?? null);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -87,11 +83,11 @@ export default function ProductionEntriesPage() {
   }, [load]);
 
   const totals = useMemo(() => {
-    const meters = entries.reduce((s, e) => s + (e.production_meter ?? 0), 0);
+    const meters = entries.reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
     const eff =
       entries.length === 0
         ? 0
-        : entries.reduce((s, e) => s + (e.efficiency ?? 0), 0) / entries.length;
+        : entries.reduce((s, e) => s + Number(e.efficiency ?? 0), 0) / entries.length;
     return { meters, eff };
   }, [entries]);
 
@@ -101,12 +97,14 @@ export default function ProductionEntriesPage() {
     {
       key: "loom",
       header: "Loom",
-      render: (r) => loomMap.get(r.loom_id)?.loom_number ?? r.loom_id.slice(0, 8),
+      render: (r) =>
+        loomMap.get(r.loom_id)?.loom_number ??
+        (r.loom_id ? String(r.loom_id).slice(0, 8) : "—"),
     },
     {
       key: "production_meter",
       header: "Production (M)",
-      render: (r) => r.production_meter.toLocaleString("en-IN"),
+      render: (r) => Number(r.production_meter ?? 0).toLocaleString("en-IN"),
     },
     {
       key: "efficiency",
@@ -121,6 +119,11 @@ export default function ProductionEntriesPage() {
     setSaving(true);
     const opening = Number(form.opening_meter);
     const closing = Number(form.closing_meter);
+    if (closing < opening) {
+      setError("Closing meter must be greater than or equal to opening meter.");
+      setSaving(false);
+      return;
+    }
     const payload = {
       entry_number: form.entry_number,
       entry_date: form.entry_date,
@@ -131,7 +134,7 @@ export default function ProductionEntriesPage() {
       remarks: form.remarks || null,
     };
     const sb = getSupabase();
-    if (!sb) {
+    if (!sb || fromDemo) {
       setEntries((prev) => [
         {
           id: crypto.randomUUID(),
@@ -171,7 +174,7 @@ export default function ProductionEntriesPage() {
       setOpen(false);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setError(toUserError(err, "Could not save production entry"));
     } finally {
       setSaving(false);
     }
@@ -188,6 +191,12 @@ export default function ProductionEntriesPage() {
           </button>
         }
       />
+
+      {fromDemo ? (
+        <AlertBanner tone="info" title="Demo data">
+          Production tables are not connected yet. Showing preview entries.
+        </AlertBanner>
+      ) : null}
 
       <div className="fleet-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))" }}>
         <StatCard label="Entries" value={entries.length} />

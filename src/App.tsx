@@ -101,9 +101,11 @@ function SecurityNav({
 }
 
 function Protected({ children }: { children: ReactNode }) {
-  const { session, loading, demoMode } = useAuth();
+  const { session, loading, demoMode, profile } = useAuth();
   if (loading) return <LoadingState label="Starting OPA ERP…" />;
-  if (!session && isErpSupabaseConfigured() && !demoMode) {
+  // Allow Demo Mode preview without a Supabase session. Require login only when
+  // Supabase is configured AND we have neither a session nor a demo profile.
+  if (!session && isErpSupabaseConfigured() && !demoMode && !profile) {
     return <Navigate to="/login" replace />;
   }
   return children;

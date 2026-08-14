@@ -50,6 +50,8 @@ function Dashboard({
   const fillPct = Math.min(100, (production.actual / production.target) * 100);
   const visible =
     filter === "all" ? looms : looms.filter((l) => l.status === filter);
+  const pageSize = filter === "all" ? 24 : visible.length;
+  const rows = visible.slice(0, pageSize);
 
   return (
     <>
@@ -65,31 +67,47 @@ function Dashboard({
 
       <div className="section-head">
         <h3>Loom Fleet</h3>
-        <span>Real-time shed overview</span>
+        <span>Real-time shed overview · click a status to filter</span>
       </div>
       <div className="fleet-grid">
-        <article className="panel stat">
+        <button
+          type="button"
+          className={`panel stat fleet-btn${filter === "all" ? " selected" : ""}`}
+          onClick={() => setFilter("all")}
+        >
           <span className="label">Total Looms</span>
           <div className="value">{fleet.total}</div>
           <div className="hint">Installed capacity</div>
-        </article>
-        <article className="panel stat running">
+        </button>
+        <button
+          type="button"
+          className={`panel stat running fleet-btn${filter === "running" ? " selected" : ""}`}
+          onClick={() => setFilter("running")}
+        >
           <span className="label">Running</span>
           <div className="value">{fleet.running}</div>
           <div className="hint">
             {((fleet.running / fleet.total) * 100).toFixed(1)}% of fleet
           </div>
-        </article>
-        <article className="panel stat stopped">
+        </button>
+        <button
+          type="button"
+          className={`panel stat stopped fleet-btn${filter === "stopped" ? " selected" : ""}`}
+          onClick={() => setFilter("stopped")}
+        >
           <span className="label">Stopped</span>
           <div className="value">{fleet.stopped}</div>
           <div className="hint">Idle / changeover</div>
-        </article>
-        <article className="panel stat breakdown">
+        </button>
+        <button
+          type="button"
+          className={`panel stat breakdown fleet-btn${filter === "breakdown" ? " selected" : ""}`}
+          onClick={() => setFilter("breakdown")}
+        >
           <span className="label">Breakdown</span>
           <div className="value">{fleet.breakdown}</div>
           <div className="hint">Needs attention</div>
-        </article>
+        </button>
       </div>
 
       <div className="production-layout">
@@ -181,11 +199,12 @@ function Dashboard({
         </section>
       </div>
 
-      <section className="panel table-panel">
+      <section className="panel table-panel" id="loom-board">
         <div className="section-head">
           <h3>Loom Board</h3>
           <span>
-            Showing {visible.length} of {looms.length}
+            Showing {rows.length} of {visible.length}
+            {filter !== "all" ? ` · ${filter}` : ""}
           </span>
         </div>
         <div className="filters" role="tablist" aria-label="Filter looms by status">
@@ -206,6 +225,15 @@ function Dashboard({
               onClick={() => setFilter(id)}
             >
               {label}
+              {id !== "all" && (
+                <span className="filter-count">
+                  {id === "running"
+                    ? fleet.running
+                    : id === "stopped"
+                      ? fleet.stopped
+                      : fleet.breakdown}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -222,7 +250,7 @@ function Dashboard({
               </tr>
             </thead>
             <tbody>
-              {visible.slice(0, 24).map((loom) => (
+              {rows.map((loom) => (
                 <tr key={loom.id}>
                   <td>{loom.id}</td>
                   <td>{loom.shed}</td>

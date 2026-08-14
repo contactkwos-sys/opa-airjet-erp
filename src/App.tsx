@@ -1,13 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   buildLooms,
   fleet,
-  navItems,
+  loomNavItems,
   operations,
   production,
+  securityNavItems,
   type LoomStatus,
-  type NavId,
+  type LoomNavId,
+  type SecurityNavId,
 } from "./data";
+import { useAuth } from "./lib/auth";
+import { ROLE_LABELS } from "./lib/roles";
+import { canAccessSecurity, hasPermission } from "./lib/roles";
+import { listNotifications } from "./services/securityService";
+import { LoginPage } from "./modules/security/LoginPage";
+import { SecurityDashboard } from "./modules/security/SecurityDashboard";
+import { VisitorRequestsPage } from "./modules/security/VisitorRequestsPage";
+import { CeoVisitRequestsPage } from "./modules/security/CeoVisitRequestsPage";
+import {
+  GatePassPage,
+  VisitorHistoryPage,
+  VisitorsInsidePage,
+} from "./modules/security/GateAndHistory";
+import {
+  MaterialGatePage,
+  SecurityIncidentsPage,
+  VehicleManagementPage,
+} from "./modules/security/VehiclesMaterialIncidents";
+import {
+  NotificationsPage,
+  SecurityReportsPage,
+  SecuritySettingsPage,
+} from "./modules/security/ReportsNotifications";
+import { CeoApprovalPage } from "./modules/ceo/CeoApprovalPage";
+import { isSupabaseConfigured } from "./lib/supabase";
+import { subscribeStore } from "./lib/localStore";
 
 function formatMeters(n: number) {
   return `${n.toLocaleString("en-IN")} M`;
@@ -279,9 +308,88 @@ function SectionPage({
   );
 }
 
-export default function App() {
-  const [nav, setNav] = useState<NavId>("dashboard");
+function SecurityModule({ page }: { page: SecurityNavId }) {
+  const navigate = useNavigate();
+  switch (page) {
+    case "security-dashboard":
+      return (
+        <SecurityDashboard
+          onNavigate={(id) => navigate(`/security/${id}`)}
+        />
+      );
+    case "visitor-requests":
+      return <VisitorRequestsPage />;
+    case "ceo-requests":
+      return <CeoVisitRequestsPage />;
+    case "visitors-inside":
+      return <VisitorsInsidePage />;
+    case "gate-pass":
+      return <GatePassPage />;
+    case "vehicles":
+      return <VehicleManagementPage />;
+    case "material-gate":
+      return <MaterialGatePage />;
+    case "incidents":
+      return <SecurityIncidentsPage />;
+    case "history":
+      return <VisitorHistoryPage />;
+    case "reports":
+      return <SecurityReportsPage />;
+    case "notifications":
+      return <NotificationsPage />;
+    case "settings":
+      return <SecuritySettingsPage />;
+    default:
+      return <SecurityDashboard onNavigate={(id) => navigate(`/security/${id}`)} />;
+  }
+}
+
+function AppShell() {
+  const { user, loading, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<LoomStatus | "all">("all");
+  const [unread, setUnread] = useState(0);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  const inSecurity = location.pathname.startsWith("/security");
+  const loomNav: LoomNavId = useMemo(() => {
+    const p = location.pathname.replace(/^\//, "") || "dashboard";
+    if (p.startsWith("security")) return "security";
+    if (loomNavItems.some((n) => n.id === p)) return p as LoomNavId;
+    return "dashboard";
+  }, [location.pathname]);
+
+  const securityPage: SecurityNavId = useMemo(() => {
+    const parts = location.pathname.split("/").filter(Boolean);
+    if (parts[0] === "security" && parts[1]) {
+      const id = parts[1] as SecurityNavId;
+      if (securityNavItems.some((n) => n.id === id)) return id;
+    }
+    return "security-dashboard";
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadN() {
+      const list = await listNotifications(user!);
+      setUnread(list.filter((n) => !n.is_read).length);
+      const latest = list.find((n) => !n.is_read && n.notification_type.startsWith("CEO_"));
+      if (latest) setFlash(latest.message);
+    }
+    void loadN();
+    if (!isSupabaseConfigured) return subscribeStore(() => void loadN());
+  }, [user, location.pathname]);
+
+  if (loading) {
+    return <div className="loading-block full">Loading OPA ERP…</div>;
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  const showSecurityNav = canAccessSecurity(user.role);
 
   return (
     <div className="app-shell">
@@ -294,17 +402,42 @@ export default function App() {
           <p>Air Jet Loom Management System</p>
         </div>
         <nav className="nav" aria-label="Primary">
-          {navItems.map((item) => (
+          {loomNavItems.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={nav === item.id ? "active" : undefined}
-              onClick={() => setNav(item.id)}
+              className={loomNav === item.id && !inSecurity ? "active" : undefined}
+              onClick={() => {
+                if (item.id === "security") navigate("/security/security-dashboard");
+                else navigate(`/${item.id === "dashboard" ? "" : item.id}`);
+              }}
             >
               {item.label}
             </button>
           ))}
         </nav>
+
+        {inSecurity && showSecurityNav && (
+          <nav className="nav security-subnav" aria-label="Security">
+            <div className="nav-section-label">Security</div>
+            {securityNavItems.map((item) => {
+              if (item.id === "ceo-requests" && !hasPermission(user.role, "ceo.requests.view") && !hasPermission(user.role, "admin.full") && !hasPermission(user.role, "security.dashboard")) {
+                return null;
+              }
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={securityPage === item.id ? "active" : undefined}
+                  onClick={() => navigate(`/security/${item.id}`)}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        )}
+
         <div className="sidebar-foot">
           Plant control room · Shed A &amp; B
           <br />
@@ -312,88 +445,110 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="main">
-        {nav === "dashboard" && (
-          <Dashboard filter={filter} setFilter={setFilter} />
+      <div className="main-wrap">
+        <div className="app-topstrip">
+          <div>
+            <strong>OPA Group of India</strong>
+            <span className="muted"> · {formatClock(new Date()).split(",")[0]}</span>
+          </div>
+          <div className="topstrip-right">
+            <LiveClock />
+            <button type="button" className="btn tiny ghost" onClick={() => navigate("/security/notifications")}>
+              Alerts{unread ? ` (${unread})` : ""}
+            </button>
+            <div className="profile-chip">
+              <span>{user.full_name}</span>
+              <em>{ROLE_LABELS[user.role]}</em>
+            </div>
+            <button type="button" className="btn tiny" onClick={() => void logout()}>
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {flash && inSecurity && (
+          <div className="banner success flash-banner">
+            {flash}
+            <button type="button" className="icon-btn" onClick={() => setFlash(null)} aria-label="Dismiss">
+              ×
+            </button>
+          </div>
         )}
-        {nav === "looms" && (
-          <SectionPage
-            title="Looms"
-            blurb="Monitor individual machine status across both sheds."
-            kpis={[
-              { label: "Total", value: String(fleet.total) },
-              { label: "Running", value: String(fleet.running) },
-              { label: "Stopped", value: String(fleet.stopped) },
-              { label: "Breakdown", value: String(fleet.breakdown) },
-            ]}
-          />
-        )}
-        {nav === "production" && (
-          <SectionPage
-            title="Production"
-            blurb="Daily output versus target for dobby and plain weaves."
-            kpis={[
-              { label: "Target", value: formatMeters(production.target) },
-              { label: "Actual", value: formatMeters(production.actual) },
-              { label: "Efficiency", value: `${production.efficiency}%` },
-              { label: "Dobby", value: `${production.dobby}%` },
-              { label: "Plain", value: `${production.plain}%` },
-            ]}
-          />
-        )}
-        {nav === "maintenance" && (
-          <SectionPage
-            title="Maintenance"
-            blurb="Breakdown response and scheduled service backlog."
-            kpis={[
-              {
-                label: "Breakdown Today",
-                value: String(operations.breakdownToday),
-              },
-              {
-                label: "Pending Jobs",
-                value: String(operations.maintenancePending),
-              },
-            ]}
-          />
-        )}
-        {nav === "inventory" && (
-          <SectionPage
-            title="Inventory"
-            blurb="Spares and consumables below reorder level."
-            kpis={[
-              {
-                label: "Low Stock Items",
-                value: String(operations.lowStockItems),
-              },
-            ]}
-          />
-        )}
-        {nav === "purchase" && (
-          <SectionPage
-            title="Purchase"
-            blurb="Open purchase requests awaiting approval or receipt."
-            kpis={[
-              {
-                label: "Purchase Pending",
-                value: String(operations.purchasePending),
-              },
-            ]}
-          />
-        )}
-        {nav === "security" && (
-          <SectionPage
-            title="Security"
-            blurb="Gate and shed access exceptions requiring review."
-            kpis={[
-              {
-                label: "Security Alerts",
-                value: String(operations.securityAlerts),
-              },
-            ]}
-          />
-        )}
-      </main>
+
+        <main className="main">
+          {!inSecurity && loomNav === "dashboard" && (
+            <Dashboard filter={filter} setFilter={setFilter} />
+          )}
+          {!inSecurity && loomNav === "looms" && (
+            <SectionPage
+              title="Looms"
+              blurb="Monitor individual machine status across both sheds."
+              kpis={[
+                { label: "Total", value: String(fleet.total) },
+                { label: "Running", value: String(fleet.running) },
+                { label: "Stopped", value: String(fleet.stopped) },
+                { label: "Breakdown", value: String(fleet.breakdown) },
+              ]}
+            />
+          )}
+          {!inSecurity && loomNav === "production" && (
+            <SectionPage
+              title="Production"
+              blurb="Daily output versus target for dobby and plain weaves."
+              kpis={[
+                { label: "Target", value: formatMeters(production.target) },
+                { label: "Actual", value: formatMeters(production.actual) },
+                { label: "Efficiency", value: `${production.efficiency}%` },
+                { label: "Dobby", value: `${production.dobby}%` },
+                { label: "Plain", value: `${production.plain}%` },
+              ]}
+            />
+          )}
+          {!inSecurity && loomNav === "maintenance" && (
+            <SectionPage
+              title="Maintenance"
+              blurb="Breakdown response and scheduled service backlog."
+              kpis={[
+                { label: "Breakdown Today", value: String(operations.breakdownToday) },
+                { label: "Pending Jobs", value: String(operations.maintenancePending) },
+              ]}
+            />
+          )}
+          {!inSecurity && loomNav === "inventory" && (
+            <SectionPage
+              title="Inventory"
+              blurb="Spares and consumables below reorder level."
+              kpis={[{ label: "Low Stock Items", value: String(operations.lowStockItems) }]}
+            />
+          )}
+          {!inSecurity && loomNav === "purchase" && (
+            <SectionPage
+              title="Purchase"
+              blurb="Open purchase requests awaiting approval or receipt."
+              kpis={[{ label: "Purchase Pending", value: String(operations.purchasePending) }]}
+            />
+          )}
+          {inSecurity && showSecurityNav && <SecurityModule page={securityPage} />}
+          {inSecurity && !showSecurityNav && (
+            <section className="panel page-card">
+              <h3>Access denied</h3>
+              <p>Your role does not include security module access.</p>
+            </section>
+          )}
+        </main>
+      </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/ceo-approval/:id" element={<CeoApprovalPage />} />
+      <Route path="/security/:page" element={<AppShell />} />
+      <Route path="/security" element={<Navigate to="/security/security-dashboard" replace />} />
+      <Route path="/:section" element={<AppShell />} />
+      <Route path="/" element={<AppShell />} />
+    </Routes>
   );
 }

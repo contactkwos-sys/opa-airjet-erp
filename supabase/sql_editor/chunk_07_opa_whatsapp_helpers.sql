@@ -1,4 +1,13 @@
 -- =============================================================================
+-- OPA AIR JET ERP — SQL Editor chunk 7/10
+-- Source: supabase/migrations/202608140006_opa_security.sql
+-- Target project ONLY: rjpwznapyaegotbswlke (OPA AIR JET ERP)
+-- Do NOT run on ixulyhomqtajenigopai
+-- Paste THIS ENTIRE FILE into Supabase SQL Editor and Run, then continue to next chunk.
+-- SQL body below is unchanged from the source migration.
+-- =============================================================================
+
+-- =============================================================================
 -- OPA Group of India – Air Jet Loom ERP
 -- Migration 006: Security integration notes + WhatsApp outbox helpers
 --

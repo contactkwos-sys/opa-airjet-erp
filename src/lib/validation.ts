@@ -73,7 +73,10 @@ export const stoppageFormSchema = z.object({
 export const targetFormSchema = z.object({
   target_type: requiredTextSchema,
   target_date: dateStringSchema,
+  loom_type: z.string().optional(),
+  loom_id: z.string().optional(),
   target_meter: nonNegativeNumberSchema,
+  target_kg: nonNegativeNumberSchema.optional(),
   remarks: z.string().optional(),
 });
 
@@ -100,6 +103,10 @@ export const inventoryItemFormSchema = z.object({
   category: requiredTextSchema,
   uom: requiredTextSchema,
   reorder_level: nonNegativeNumberSchema.optional(),
+  min_stock: nonNegativeNumberSchema.optional(),
+  max_stock: nonNegativeNumberSchema.optional(),
+  current_qty: nonNegativeNumberSchema.optional(),
+  unit_cost: nonNegativeNumberSchema.optional(),
 });
 
 export const yarnFormSchema = z.object({
@@ -107,7 +114,10 @@ export const yarnFormSchema = z.object({
   name: requiredTextSchema,
   count: z.string().optional(),
   blend: z.string().optional(),
+  color: z.string().optional(),
   uom: requiredTextSchema,
+  current_qty: nonNegativeNumberSchema.optional(),
+  unit_cost: nonNegativeNumberSchema.optional(),
 });
 
 export const beamFormSchema = z.object({
@@ -115,6 +125,8 @@ export const beamFormSchema = z.object({
   status: requiredTextSchema,
   length_meters: nonNegativeNumberSchema,
   remaining_meters: nonNegativeNumberSchema,
+  loom_id: z.string().optional(),
+  yarn_id: z.string().optional(),
 });
 
 export const greigeFormSchema = z.object({

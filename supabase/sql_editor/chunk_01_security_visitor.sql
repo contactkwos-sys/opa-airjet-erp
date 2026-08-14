@@ -1,4 +1,13 @@
 -- =============================================================================
+-- OPA AIR JET ERP — SQL Editor chunk 1/10
+-- Source: supabase/migrations/20260814000000_security_visitor_module.sql
+-- Target project ONLY: rjpwznapyaegotbswlke (OPA AIR JET ERP)
+-- Do NOT run on ixulyhomqtajenigopai
+-- Paste THIS ENTIRE FILE into Supabase SQL Editor and Run, then continue to next chunk.
+-- SQL body below is unchanged from the source migration.
+-- =============================================================================
+
+-- =============================================================================
 -- OPA Group of India — Security + Visitor Management Module
 -- Non-destructive / coexistence-safe for shared Supabase projects.
 --

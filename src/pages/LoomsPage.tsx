@@ -90,7 +90,7 @@ export default function LoomsPage() {
     {
       key: "loom_number",
       header: "Loom",
-      render: (r) => <Link to={`/looms/${r.id}`}>{r.loom_number}</Link>,
+      render: (r) => <Link to={`/looms/${r.id}`}>{r.loom_code || r.loom_number}</Link>,
     },
     { key: "location", header: "Location", render: (r) => r.location ?? "—" },
     { key: "loom_type", header: "Type", render: (r) => r.loom_type },
@@ -98,6 +98,11 @@ export default function LoomsPage() {
       key: "status",
       header: "Status",
       render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      key: "operator",
+      header: "Operator",
+      render: (r) => r.operator_name ?? "—",
     },
     {
       key: "article",

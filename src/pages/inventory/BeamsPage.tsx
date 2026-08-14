@@ -14,6 +14,7 @@ const columns: Column<Row>[] = [
   },
   { key: "remaining_meters", header: "Remaining", render: (r) => String(r.remaining_meters ?? "—") },
   { key: "loom_id", header: "Loom", render: (r) => String(r.loom_id ?? "—") },
+  { key: "yarn_id", header: "Yarn", render: (r) => String(r.yarn_id ?? "—") },
 ];
 
 const fields = [
@@ -34,13 +35,15 @@ const fields = [
   },
   { name: "length_meters", label: "Length meters", type: "number" as const, required: true },
   { name: "remaining_meters", label: "Remaining meters", type: "number" as const, required: true },
+  { name: "loom_id", label: "Loom id (optional)", type: "text" as const },
+  { name: "yarn_id", label: "Yarn id (optional)", type: "text" as const },
 ];
 
-export default function Page() {
+export default function BeamsPage() {
   return (
     <ModulePage
-      title="Beams"
-      subtitle="Beam lifecycle from available to running."
+      title="Beam Store"
+      subtitle="Beam lifecycle from available to running on the loom."
       table="opa_beams"
       moduleKey="inventory"
       columns={columns}
@@ -51,6 +54,8 @@ export default function Page() {
         status: "AVAILABLE",
         length_meters: 0,
         remaining_meters: 0,
+        loom_id: null,
+        yarn_id: null,
       })}
     />
   );

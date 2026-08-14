@@ -1,4 +1,13 @@
 -- =============================================================================
+-- OPA AIR JET ERP — SQL Editor chunk 9/10
+-- Source: supabase/migrations/202608140008_opa_rls.sql
+-- Target project ONLY: rjpwznapyaegotbswlke (OPA AIR JET ERP)
+-- Do NOT run on ixulyhomqtajenigopai
+-- Paste THIS ENTIRE FILE into Supabase SQL Editor and Run, then continue to next chunk.
+-- SQL body below is unchanged from the source migration.
+-- =============================================================================
+
+-- =============================================================================
 -- OPA Group of India – Air Jet Loom ERP
 -- Migration 008: RLS helpers, role-aware policies, realtime publication
 -- =============================================================================

@@ -8,7 +8,7 @@ const now = () => new Date().toISOString();
 const id = (prefix: string, n: number) =>
   `00000000-0000-4000-8000-${prefix}${String(n).padStart(8, "0")}`.slice(0, 36);
 
-/** Demo looms matching seed naming: DOBBY 01-36, PLAIN 37-72 */
+/** Demo looms: D01–D36 (Dobby), P01–P36 (Plain) — 72 machines */
 export function buildDemoLooms(): OpaLoom[] {
   const ts = now();
   const looms: OpaLoom[] = [];
@@ -18,10 +18,11 @@ export function buildDemoLooms(): OpaLoom[] {
 
   for (let i = 1; i <= 72; i++) {
     const loom_type: LoomType = i <= 36 ? "DOBBY" : "PLAIN";
-    const loom_number =
+    const loom_code =
       loom_type === "DOBBY"
-        ? `DOBBY LOOM ${String(i).padStart(2, "0")}`
-        : `PLAIN LOOM ${String(i).padStart(2, "0")}`;
+        ? `D${String(i).padStart(2, "0")}`
+        : `P${String(i - 36).padStart(2, "0")}`;
+    const loom_number = loom_code;
 
     let status: LoomStatus = "RUNNING";
     if (breakdown < fleet.breakdown && i % 23 === 0) {
@@ -44,6 +45,7 @@ export function buildDemoLooms(): OpaLoom[] {
     looms.push({
       id: `demo-loom-${i}`,
       loom_number,
+      loom_code,
       loom_type,
       make: "Toyota",
       model: loom_type === "DOBBY" ? "JAT810-D" : "JAT810",
@@ -53,6 +55,9 @@ export function buildDemoLooms(): OpaLoom[] {
       reed: 72,
       pick: 68,
       rpm: status === "RUNNING" ? 850 : 0,
+      production_capacity: 1200,
+      department: "Production",
+      operator_name: status === "RUNNING" ? `OP-${String((i % 24) + 1).padStart(2, "0")}` : null,
       motor: "AC",
       controller: "Electronic",
       dobby_unit: loom_type === "DOBBY" ? "Staubli" : null,
@@ -82,17 +87,29 @@ export function buildDemoProductionEntries(looms: OpaLoom[]): OpaProductionEntry
       entry_number: `PE-${d.replace(/-/g, "")}-${String(idx + 1).padStart(3, "0")}`,
       entry_date: d,
       shift_id: null,
+      shift_code: (["A", "B", "C"] as const)[idx % 3],
       loom_id: loom.id,
       article_id: null,
       opening_meter: opening,
       closing_meter: opening + prod,
       production_meter: prod,
       production_kg: Math.round(prod * 0.18 * 10) / 10,
+      waste_kg: Math.round(prod * 0.01 * 10) / 10,
+      waste_percentage: 1.1,
       running_hours: loom.status === "RUNNING" ? 7.5 : 2,
       downtime_hours: loom.status === "RUNNING" ? 0.5 : 5,
       efficiency: loom.status === "RUNNING" ? 90 + (idx % 8) : 35,
       operator_id: null,
+      operator_name: loom.operator_name,
       supervisor_id: null,
+      style: `ST-${(idx % 5) + 1}`,
+      design: `DS-${(idx % 4) + 1}`,
+      fabric_quality: "A",
+      fabric_width: 190,
+      gsm: 120,
+      warp_count: "40s",
+      weft_count: "40s",
+      beam_no: `BM-${100 + idx}`,
       remarks: null,
       created_at: now(),
       updated_at: now(),
@@ -128,6 +145,7 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       end_time: `${d}T08:42:00+05:30`,
       department: "Production",
       remarks: "Warp break on left side",
+      duration_minutes: 27,
     },
     {
       id: id("st", 2),
@@ -137,6 +155,37 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       end_time: null,
       department: "Maintenance",
       remarks: "Main motor trip",
+      duration_minutes: null,
+    },
+    {
+      id: id("st", 3),
+      loom_id: "demo-loom-10",
+      reason: "BREAKDOWN",
+      start_time: `${d}T04:10:00+05:30`,
+      end_time: `${d}T07:40:00+05:30`,
+      department: "Maintenance",
+      remarks: "Weft feeder jam",
+      duration_minutes: 210,
+    },
+    {
+      id: id("st", 4),
+      loom_id: "demo-loom-45",
+      reason: "BREAKDOWN",
+      start_time: `${d}T09:00:00+05:30`,
+      end_time: `${d}T10:15:00+05:30`,
+      department: "Maintenance",
+      remarks: "Air pressure drop",
+      duration_minutes: 75,
+    },
+    {
+      id: id("st", 5),
+      loom_id: "demo-loom-23",
+      reason: "BREAKDOWN",
+      start_time: `${d}T01:00:00+05:30`,
+      end_time: `${d}T03:30:00+05:30`,
+      department: "Maintenance",
+      remarks: "Previous motor trip",
+      duration_minutes: 150,
     },
   ],
   opa_production_targets: [
@@ -144,17 +193,49 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       id: id("tg", 1),
       target_type: "DAILY",
       target_date: d,
+      loom_type: null,
+      loom_id: null,
       target_meter: 72000,
+      target_kg: 12960,
       actual_meter: 68450,
+      actual_kg: 12321,
       remarks: "Plant daily target",
     },
     {
       id: id("tg", 2),
       target_type: "SHIFT",
       target_date: d,
+      loom_type: "DOBBY",
+      loom_id: null,
       target_meter: 24000,
+      target_kg: 4320,
       actual_meter: 23100,
-      remarks: "Shift A",
+      actual_kg: 4158,
+      remarks: "Shift A — Dobby",
+    },
+    {
+      id: id("tg", 3),
+      target_type: "LOOM",
+      target_date: d,
+      loom_type: "DOBBY",
+      loom_id: "demo-loom-1",
+      target_meter: 1100,
+      target_kg: 198,
+      actual_meter: 980,
+      actual_kg: 176,
+      remarks: "D01 daily loom target",
+    },
+    {
+      id: id("tg", 4),
+      target_type: "MONTHLY",
+      target_date: `${d.slice(0, 8)}01`,
+      loom_type: null,
+      loom_id: null,
+      target_meter: 2100000,
+      target_kg: 378000,
+      actual_meter: 1684500,
+      actual_kg: 303210,
+      remarks: "Plant monthly target",
     },
   ],
   opa_production_plans: [
@@ -205,6 +286,10 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       category: "SPARES",
       uom: "PCS",
       reorder_level: 5,
+      min_stock: 3,
+      max_stock: 40,
+      current_qty: 4,
+      unit_cost: 850,
       is_active: true,
     },
     {
@@ -214,6 +299,43 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       category: "YARN",
       uom: "KG",
       reorder_level: 500,
+      min_stock: 200,
+      max_stock: 5000,
+      current_qty: 320,
+      unit_cost: 210,
+      is_active: true,
+    },
+    {
+      id: id("inv", 3),
+      item_code: "BEAM-WRAP-18K",
+      name: "Warp beam blank 18k",
+      category: "BEAM",
+      uom: "PCS",
+      reorder_level: 8,
+      current_qty: 6,
+      unit_cost: 4200,
+      is_active: true,
+    },
+    {
+      id: id("inv", 4),
+      item_code: "FAB-GREIGE-A",
+      name: "Greige fabric roll A",
+      category: "FABRIC",
+      uom: "M",
+      reorder_level: 1000,
+      current_qty: 2450,
+      unit_cost: 42,
+      is_active: true,
+    },
+    {
+      id: id("inv", 5),
+      item_code: "GEN-OIL-AJ",
+      name: "Air-jet loom oil",
+      category: "CONSUMABLE",
+      uom: "LTR",
+      reorder_level: 20,
+      current_qty: 48,
+      unit_cost: 320,
       is_active: true,
     },
   ],
@@ -224,7 +346,10 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       name: "40s Cotton",
       count: "40s",
       blend: "100% Cotton",
+      color: "Natural",
       uom: "KG",
+      current_qty: 4200,
+      unit_cost: 210,
       is_active: true,
     },
     {
@@ -233,7 +358,10 @@ export const DEMO_BY_TABLE: Record<string, Row[]> = {
       name: "60s Poly-Cotton",
       count: "60s",
       blend: "65/35 PC",
+      color: "White",
       uom: "KG",
+      current_qty: 1800,
+      unit_cost: 185,
       is_active: true,
     },
   ],

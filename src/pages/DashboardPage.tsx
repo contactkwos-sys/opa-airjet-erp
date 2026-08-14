@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { getSupabase } from "@/lib/supabase";
-import { buildDemoLooms, demoKpis } from "@/lib/demoData";
-import type { LoomStatus, OpaAlert, OpaLoom } from "@/types/database";
+import { buildDemoLooms, buildDemoProductionEntries } from "@/lib/demoData";
+import { buildPlantMetrics } from "@/lib/plantMetrics";
+import { displayLoomNumber } from "@/lib/loomCodes";
+import { achievementRag } from "@/lib/productionCalc";
+import type { LoomStatus, OpaAlert, OpaLoom, OpaProductionEntry } from "@/types/database";
 import {
   PageHeader,
   StatCard,
@@ -16,7 +19,7 @@ import {
 import { TrendChart, BarChartCard, PieChartCard } from "@/components/charts";
 
 function formatMeters(n: number) {
-  return `${n.toLocaleString("en-IN")} M`;
+  return `${Math.round(n).toLocaleString("en-IN")} M`;
 }
 
 function LiveClock() {
@@ -33,27 +36,9 @@ function LiveClock() {
   );
 }
 
-function countByStatus(looms: OpaLoom[]) {
-  const counts = {
-    total: looms.length,
-    running: 0,
-    stopped: 0,
-    breakdown: 0,
-    maintenance: 0,
-    idle: 0,
-  };
-  for (const l of looms) {
-    if (l.status === "RUNNING") counts.running++;
-    else if (l.status === "STOPPED") counts.stopped++;
-    else if (l.status === "BREAKDOWN") counts.breakdown++;
-    else if (l.status === "MAINTENANCE") counts.maintenance++;
-    else counts.idle++;
-  }
-  return counts;
-}
-
 export default function DashboardPage() {
   const [looms, setLooms] = useState<OpaLoom[]>([]);
+  const [entries, setEntries] = useState<OpaProductionEntry[]>([]);
   const [alerts, setAlerts] = useState<OpaAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingDemo, setUsingDemo] = useState(false);
@@ -62,16 +47,18 @@ export default function DashboardPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      const demoLooms = buildDemoLooms();
       const sb = getSupabase();
       if (!sb) {
         if (!cancelled) {
-          setLooms(buildDemoLooms());
+          setLooms(demoLooms);
+          setEntries(buildDemoProductionEntries(demoLooms));
           setAlerts([
             {
               id: "a1",
               type: "BREAKDOWN",
               severity: "HIGH",
-              title: "Loom breakdown — PLAIN LOOM 46",
+              title: "Loom breakdown — P10",
               body: "Mechanical fault reported on Shed B",
               module: "looms",
               record_id: null,
@@ -102,7 +89,7 @@ export default function DashboardPage() {
         return;
       }
       try {
-        const [loomRes, alertRes] = await Promise.all([
+        const [loomRes, alertRes, entryRes] = await Promise.all([
           sb.from("opa_looms").select("*").eq("is_active", true).order("loom_number"),
           sb
             .from("opa_alerts")
@@ -110,20 +97,27 @@ export default function DashboardPage() {
             .eq("is_resolved", false)
             .order("created_at", { ascending: false })
             .limit(8),
+          sb
+            .from("opa_production_entries")
+            .select("*")
+            .order("entry_date", { ascending: false })
+            .limit(200),
         ]);
         if (cancelled) return;
         if (loomRes.error || !loomRes.data?.length) {
-          setLooms(buildDemoLooms());
+          setLooms(demoLooms);
+          setEntries(buildDemoProductionEntries(demoLooms));
           setUsingDemo(true);
         } else {
           setLooms(loomRes.data as OpaLoom[]);
+          if (entryRes.data?.length) setEntries(entryRes.data as OpaProductionEntry[]);
+          else setEntries(buildDemoProductionEntries(loomRes.data as OpaLoom[]));
         }
-        if (alertRes.data?.length) {
-          setAlerts(alertRes.data as OpaAlert[]);
-        }
+        if (alertRes.data?.length) setAlerts(alertRes.data as OpaAlert[]);
       } catch {
         if (!cancelled) {
-          setLooms(buildDemoLooms());
+          setLooms(demoLooms);
+          setEntries(buildDemoProductionEntries(demoLooms));
           setUsingDemo(true);
         }
       } finally {
@@ -136,45 +130,23 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const fleetCounts = useMemo(() => countByStatus(looms), [looms]);
-  const k = demoKpis;
-  const fillPct = Math.min(100, (k.production.actual / k.production.target) * 100);
-  const trend = useMemo(
-    () =>
-      ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name, i) => ({
-        name,
-        value: Math.round(k.production.actual * (0.82 + i * 0.025)),
-      })),
-    [k.production.actual],
-  );
+  const m = useMemo(() => buildPlantMetrics({ looms, entries }), [looms, entries]);
+  const rag = achievementRag(m.achievement);
   const statusPie = useMemo(
     () => [
-      { name: "Running", value: fleetCounts.running },
-      { name: "Stopped", value: fleetCounts.stopped },
-      { name: "Breakdown", value: fleetCounts.breakdown },
-      { name: "Other", value: fleetCounts.maintenance + fleetCounts.idle },
+      { name: "Running", value: m.fleet.running },
+      { name: "Stopped", value: m.fleet.stopped },
+      { name: "Breakdown", value: m.fleet.breakdown },
+      { name: "Maintenance", value: m.fleet.maintenance },
+      { name: "Idle", value: m.fleet.idle },
     ],
-    [fleetCounts],
+    [m.fleet],
   );
-  const shedBars = useMemo(() => {
-    const shedA = looms.filter((l) => (l.location ?? "").includes("A") || l.loom_type === "DOBBY");
-    const shedB = looms.filter((l) => !shedA.includes(l));
-    return [
-      {
-        name: "Shed A",
-        value: shedA.filter((l) => l.status === "RUNNING").length,
-      },
-      {
-        name: "Shed B",
-        value: shedB.filter((l) => l.status === "RUNNING").length,
-      },
-    ];
-  }, [looms]);
 
   if (loading) {
     return (
       <>
-        <PageHeader title="Operations Dashboard" subtitle="Loading plant KPIs…" />
+        <PageHeader title="ERP Dashboard" subtitle="Loading plant KPIs…" />
         <LoadingState />
       </>
     );
@@ -183,134 +155,76 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Operations Dashboard"
-        subtitle="Air jet loom fleet, production, and plant pulse at a glance."
+        title="OPA Air Jet ERP Dashboard"
+        subtitle="72 air-jet looms · live plant, production, stores, purchase, maintenance & security."
         meta={<LiveClock />}
       />
 
       {usingDemo ? (
-        <AlertBanner
-          tone="info"
-          title="Demo Mode KPIs"
-          children="Showing seeded demo figures until Supabase returns live loom data."
-        />
+        <AlertBanner tone="info" title="Demo Mode KPIs">
+          Showing seeded demo figures until Supabase returns live loom data for opa-airjet-erp.
+        </AlertBanner>
       ) : null}
 
       <div className="section-head">
         <h3>Loom Fleet</h3>
         <span>
-          <Link to="/looms">View all looms</Link>
+          <Link to="/looms">Loom Master</Link>
         </span>
       </div>
       <div className="fleet-grid">
-        <StatCard label="Total Looms" value={fleetCounts.total || k.fleet.total} hint="Installed capacity" />
+        <StatCard label="Total Looms" value={m.fleet.total || 72} hint="Installed capacity" />
+        <StatCard label="Dobby" value={m.fleet.dobby || 36} hint="D01–D36" tone="sky" />
+        <StatCard label="Plain" value={m.fleet.plain || 36} hint="P01–P36" />
         <StatCard
           label="Running"
-          value={fleetCounts.running}
+          value={m.fleet.running}
           tone="running"
-          hint={`${(((fleetCounts.running || 0) / (fleetCounts.total || 1)) * 100).toFixed(1)}% of fleet`}
+          hint={`${(((m.fleet.running || 0) / (m.fleet.total || 1)) * 100).toFixed(1)}% of fleet`}
         />
-        <StatCard label="Stopped" value={fleetCounts.stopped} tone="stopped" hint="Idle / changeover" />
-        <StatCard label="Breakdown" value={fleetCounts.breakdown} tone="breakdown" hint="Needs attention" />
+        <StatCard label="Stopped" value={m.fleet.stopped} tone="stopped" />
+        <StatCard label="Under Maintenance" value={m.fleet.maintenance} tone="amber" />
       </div>
 
       <div className="kpi-row dash-kpi-extra">
-        <StatCard label="Production today" value={formatMeters(k.production.actual)} hint={`Target ${formatMeters(k.production.target)}`} />
-        <StatCard label="Efficiency" value={`${k.production.efficiency}%`} tone="running" />
-        <StatCard label="Rejection" value={`${k.rejectionPct}%`} tone="amber" />
-        <StatCard label="Downtime" value={`${k.downtimeHours} h`} tone="stopped" />
-        <StatCard label="Cost / meter" value={`₹${k.costPerMeter}`} />
-        <StatCard label="Inventory" value={`₹${k.inventoryValueLakh}L`} />
-        <StatCard label="Purchase pending" value={`₹${k.purchasePendingValue}L`} tone="amber" />
-        <StatCard label="Visitors today" value={k.visitorsToday} tone="sky" />
-        <StatCard label="CEO meetings" value={k.ceoMeetingsPending} />
-        <StatCard label="Dispatch" value={formatMeters(k.dispatchMeters)} />
-        <StatCard label="Receivables" value={`₹${k.receivablesLakh}L`} />
+        <StatCard label="Today's Production" value={formatMeters(m.todayProduction)} />
+        <StatCard label="MTD Production" value={formatMeters(m.mtdProduction)} />
+        <StatCard label="Production Target" value={formatMeters(m.targetMeter)} />
+        <StatCard
+          label="Target Achievement %"
+          value={`${m.achievement.toFixed(1)}%`}
+          tone={rag === "green" ? "running" : rag === "amber" ? "amber" : "breakdown"}
+        />
+        <StatCard label="Efficiency %" value={`${m.efficiency}%`} tone="running" />
+        <StatCard label="Downtime" value={`${m.downtimeHours} h`} tone="stopped" />
+        <StatCard label="Yarn Stock" value={`${m.yarnStock.toLocaleString("en-IN")} kg`} />
+        <StatCard label="Beam Stock" value={m.beamStock} />
+        <StatCard label="Fabric Stock" value={formatMeters(m.fabricStock)} />
+        <StatCard label="Spare Stock" value={m.spareStock} />
+        <StatCard label="Purchase Pending" value={m.purchasePending} tone="amber" />
+        <StatCard label="GRN Pending" value={m.grnPending} tone="amber" />
+        <StatCard label="Maintenance Pending" value={m.maintenancePending} tone="amber" />
+        <StatCard label="Security Visitors Today" value={m.visitorsToday} tone="sky" />
+        <StatCard label="CEO Meeting Pending" value={m.ceoPending} />
         <div className="panel stat achievement-stat">
           <span className="label">Target attainment</span>
           <AchievementIndicator
-            level={efficiencyLevel(fillPct)}
-            label={`${fillPct.toFixed(1)}% of daily target`}
-            value={`${k.production.efficiency}% eff`}
+            level={efficiencyLevel(m.achievement)}
+            label={`${m.achievement.toFixed(1)}% of daily target`}
+            value={`${m.efficiency}% eff`}
           />
         </div>
       </div>
 
-      <div className="production-layout">
-        <section className="panel prod-panel">
-          <div className="section-head">
-            <h3>Today Production</h3>
-            <span>Meters woven</span>
-          </div>
-          <div className="prod-metrics">
-            <div className="metric-block">
-              <span className="label">Target</span>
-              <div className="value">{formatMeters(k.production.target)}</div>
-            </div>
-            <div className="metric-block">
-              <span className="label">Actual</span>
-              <div className="value">{formatMeters(k.production.actual)}</div>
-            </div>
-            <div className="metric-block">
-              <span className="label">Efficiency</span>
-              <div className="value">{k.production.efficiency}%</div>
-            </div>
-          </div>
-          <div className="progress-wrap">
-            <div className="progress-meta">
-              <span>Target attainment</span>
-              <span>{fillPct.toFixed(1)}%</span>
-            </div>
-            <div
-              className="progress-track"
-              role="progressbar"
-              aria-valuenow={fillPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div className="progress-fill" style={{ ["--fill" as string]: `${fillPct}%` }} />
-            </div>
-          </div>
-          <div className="type-split">
-            <div className="type-card">
-              <div className="name">Dobby</div>
-              <div className="pct">{k.production.dobby}%</div>
-            </div>
-            <div className="type-card plain">
-              <div className="name">Plain</div>
-              <div className="pct">{k.production.plain}%</div>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel ops-panel">
-          <div className="section-head">
-            <h3>Operations Pulse</h3>
-            <span>Action queue</span>
-          </div>
-          <div className="ops-grid">
-            {[
-              ["crit", "BD", "Breakdown Today", k.operations.breakdownToday],
-              ["warn", "MT", "Maintenance Pending", k.operations.maintenancePending],
-              ["info", "ST", "Low Stock Items", k.operations.lowStockItems],
-              ["teal", "PO", "Purchase Pending", k.operations.purchasePending],
-              ["crit", "SA", "Security Alerts", k.operations.securityAlerts],
-            ].map(([tone, icon, title, count]) => (
-              <div className="op-row" key={String(title)}>
-                <div className="left">
-                  <span className={`op-icon ${tone}`}>{icon}</span>
-                  <span className="title">{title}</span>
-                </div>
-                <span className="count">{count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
       <div className="chart-grid">
-        <TrendChart title="7-day production trend" data={trend} />
-        <BarChartCard title="Running looms by shed" data={shedBars} />
+        <TrendChart title="Daily production" data={m.dailyTrend} />
+        <BarChartCard title="Loom-wise production" data={m.loomWise} />
+        <PieChartCard title="Dobby vs Plain" data={m.dobbyVsPlain} />
+        <TrendChart title="Efficiency %" data={m.efficiencyTrend} />
+        <BarChartCard title="Downtime by reason" data={m.downtimeByReason} />
+        <TrendChart title="Yarn consumption" data={m.yarnConsumption} />
+        <BarChartCard title="Monthly production" data={m.monthlyProduction} />
+        <BarChartCard title="Maintenance cost" data={m.maintenanceCost} />
         <PieChartCard title="Fleet status mix" data={statusPie} />
       </div>
 
@@ -327,7 +241,11 @@ export default function DashboardPage() {
           <ul className="alert-list">
             {alerts.map((a) => (
               <li key={a.id}>
-                <StatusBadge status={a.severity === "CRITICAL" || a.severity === "HIGH" ? "BREAKDOWN" : "STOPPED"}>
+                <StatusBadge
+                  status={
+                    a.severity === "CRITICAL" || a.severity === "HIGH" ? "BREAKDOWN" : "STOPPED"
+                  }
+                >
                   {a.severity}
                 </StatusBadge>
                 <div>
@@ -355,6 +273,7 @@ export default function DashboardPage() {
                 <th>Location</th>
                 <th>Type</th>
                 <th>Status</th>
+                <th>Operator</th>
                 <th>Article</th>
               </tr>
             </thead>
@@ -362,13 +281,14 @@ export default function DashboardPage() {
               {looms.slice(0, 12).map((loom) => (
                 <tr key={loom.id}>
                   <td>
-                    <Link to={`/looms/${loom.id}`}>{loom.loom_number}</Link>
+                    <Link to={`/looms/${loom.id}`}>{displayLoomNumber(loom)}</Link>
                   </td>
                   <td>{loom.location ?? "—"}</td>
                   <td>{loom.loom_type}</td>
                   <td>
                     <StatusBadge status={loom.status as LoomStatus} />
                   </td>
+                  <td>{loom.operator_name ?? "—"}</td>
                   <td>{loom.current_article ?? "—"}</td>
                 </tr>
               ))}

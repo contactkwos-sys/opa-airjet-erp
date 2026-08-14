@@ -1,0 +1,34 @@
+export type AchievementLevel = "red" | "amber" | "green";
+
+type Props = {
+  level: AchievementLevel;
+  label?: string;
+  value?: string | number;
+};
+
+const labels: Record<AchievementLevel, string> = {
+  red: "Below target",
+  amber: "Near target",
+  green: "On track",
+};
+
+export function AchievementIndicator({ level, label, value }: Props) {
+  return (
+    <div className={`achievement achievement-${level}`}>
+      <span className="achievement-dot" aria-hidden />
+      <div>
+        <div className="achievement-label">{label ?? labels[level]}</div>
+        {value !== undefined ? (
+          <div className="achievement-value">{value}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Map efficiency % to traffic-light achievement. */
+export function efficiencyLevel(pct: number): AchievementLevel {
+  if (pct >= 90) return "green";
+  if (pct >= 75) return "amber";
+  return "red";
+}

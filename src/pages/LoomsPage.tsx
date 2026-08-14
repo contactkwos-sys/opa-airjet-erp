@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getSupabase } from "@/lib/supabase";
 import { writeAuditLog } from "@/lib/audit";
 import { buildDemoLooms } from "@/lib/demoData";
+import { listRows, toUserError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { LoomStatus, LoomType, OpaLoom } from "@/types/database";
 import {
@@ -15,6 +16,7 @@ import {
   LoadingState,
   ErrorState,
   EmptyState,
+  AlertBanner,
   type Column,
 } from "@/components/ui";
 
@@ -46,32 +48,25 @@ export default function LoomsPage() {
     model: "",
   });
 
+  const [fromDemo, setFromDemo] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const sb = getSupabase();
-    if (!sb) {
-      setLooms(buildDemoLooms());
-      setLoading(false);
-      return;
+    const result = await listRows("opa_looms", {
+      orderBy: { column: "loom_number", ascending: true },
+      limit: 200,
+      demoRows: buildDemoLooms() as unknown as Array<{ id: string } & Record<string, unknown>>,
+    });
+    setLooms((result.data.length ? result.data : buildDemoLooms()) as OpaLoom[]);
+    setFromDemo(result.fromDemo);
+    // Missing tables → demo data only (no blocking error banner)
+    if (result.error && !result.fromDemo) {
+      setError(toUserError(result.error, "Failed to load looms"));
+    } else {
+      setError(null);
     }
-    try {
-      const { data, error: err } = await sb
-        .from("opa_looms")
-        .select("*")
-        .order("loom_number");
-      if (err) throw err;
-      if (!data?.length) {
-        setLooms(buildDemoLooms());
-      } else {
-        setLooms(data as OpaLoom[]);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load looms");
-      setLooms(buildDemoLooms());
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -176,6 +171,12 @@ export default function LoomsPage() {
           </button>
         }
       />
+
+      {fromDemo ? (
+        <AlertBanner tone="info" title="Demo data">
+          Live loom tables are not connected yet. Showing the seeded 72-loom preview.
+        </AlertBanner>
+      ) : null}
 
       <section className="panel table-panel">
         <div className="filters" role="tablist" aria-label="Filter by status">

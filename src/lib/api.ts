@@ -130,7 +130,7 @@ export async function listRows<T extends Row = Row>(
     if (demoFallback && isMissingTableError(err)) {
       return {
         data: resolveDemo(table, options) as T[],
-        error: toUserError(err),
+        error: null,
         fromDemo: true,
       };
     }

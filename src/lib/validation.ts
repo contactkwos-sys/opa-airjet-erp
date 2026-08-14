@@ -66,22 +66,8 @@ export const stoppageFormSchema = z.object({
   loom_id: requiredTextSchema,
   reason: requiredTextSchema,
   start_time: requiredTextSchema,
+  end_time: z.string().optional(),
   department: z.string().optional(),
-  remarks: z.string().optional(),
-});
-
-export const targetFormSchema = z.object({
-  target_type: requiredTextSchema,
-  target_date: dateStringSchema,
-  target_meter: nonNegativeNumberSchema,
-  remarks: z.string().optional(),
-});
-
-export const planFormSchema = z.object({
-  plan_number: requiredTextSchema,
-  plan_date: dateStringSchema,
-  planned_meter: nonNegativeNumberSchema,
-  status: requiredTextSchema,
   remarks: z.string().optional(),
 });
 
@@ -89,8 +75,36 @@ export const qualityFormSchema = z.object({
   inspection_number: requiredTextSchema,
   inspection_date: dateStringSchema,
   result: requiredTextSchema,
+  loom_id: z.string().optional(),
+  customer_name: z.string().optional(),
+  production_lot: z.string().optional(),
   grade: z.string().optional(),
   sample_meters: nonNegativeNumberSchema.optional(),
+  meters_checked: nonNegativeNumberSchema.optional(),
+  good_meters: nonNegativeNumberSchema.optional(),
+  rejected_meters: nonNegativeNumberSchema.optional(),
+  defect_type: z.string().optional(),
+  defect_quantity: nonNegativeNumberSchema.optional(),
+  remarks: z.string().optional(),
+});
+
+export const targetFormSchema = z.object({
+  target_type: requiredTextSchema,
+  target_date: dateStringSchema,
+  loom_id: z.string().optional(),
+  target_meter: nonNegativeNumberSchema,
+  actual_meter: nonNegativeNumberSchema.optional(),
+  target_kg: nonNegativeNumberSchema.optional(),
+  actual_kg: nonNegativeNumberSchema.optional(),
+  remarks: z.string().optional(),
+});
+
+export const planFormSchema = z.object({
+  plan_number: requiredTextSchema,
+  plan_date: dateStringSchema,
+  planned_meter: nonNegativeNumberSchema,
+  actual_meter: nonNegativeNumberSchema.optional(),
+  status: requiredTextSchema,
   remarks: z.string().optional(),
 });
 
@@ -100,6 +114,7 @@ export const inventoryItemFormSchema = z.object({
   category: requiredTextSchema,
   uom: requiredTextSchema,
   reorder_level: nonNegativeNumberSchema.optional(),
+  is_active: z.union([z.boolean(), z.enum(["true", "false"])]).optional(),
 });
 
 export const yarnFormSchema = z.object({
@@ -107,6 +122,9 @@ export const yarnFormSchema = z.object({
   name: requiredTextSchema,
   count: z.string().optional(),
   blend: z.string().optional(),
+  color: z.string().optional(),
+  supplier_name: z.string().optional(),
+  current_qty: nonNegativeNumberSchema.optional(),
   uom: requiredTextSchema,
 });
 
@@ -115,19 +133,25 @@ export const beamFormSchema = z.object({
   status: requiredTextSchema,
   length_meters: nonNegativeNumberSchema,
   remaining_meters: nonNegativeNumberSchema,
+  warp_ends: nonNegativeNumberSchema.optional(),
+  loom_id: z.string().optional(),
+  remarks: z.string().optional(),
 });
 
 export const greigeFormSchema = z.object({
   lot_number: requiredTextSchema,
   meters: nonNegativeNumberSchema,
+  kg: nonNegativeNumberSchema.optional(),
   quality_grade: requiredTextSchema,
-  location: z.string().optional(),
   status: requiredTextSchema,
+  remarks: z.string().optional(),
 });
 
 export const spareFormSchema = z.object({
   part_code: requiredTextSchema,
   name: requiredTextSchema,
+  category: z.string().optional(),
+  manufacturer: z.string().optional(),
   current_qty: nonNegativeNumberSchema,
   reorder_level: nonNegativeNumberSchema,
   uom: requiredTextSchema,
@@ -137,6 +161,7 @@ export const prFormSchema = z.object({
   pr_number: requiredTextSchema,
   request_date: dateStringSchema,
   priority: requiredTextSchema,
+  status: requiredTextSchema,
   remarks: z.string().optional(),
 });
 
@@ -144,13 +169,16 @@ export const poFormSchema = z.object({
   po_number: requiredTextSchema,
   po_date: dateStringSchema,
   total_amount: nonNegativeNumberSchema,
+  currency: z.string().optional(),
   status: requiredTextSchema,
+  payment_status: z.string().optional(),
   remarks: z.string().optional(),
 });
 
 export const grnFormSchema = z.object({
   grn_number: requiredTextSchema,
   grn_date: dateStringSchema,
+  invoice_number: z.string().optional(),
   status: requiredTextSchema,
   remarks: z.string().optional(),
 });
@@ -160,7 +188,10 @@ export const supplierFormSchema = z.object({
   name: requiredTextSchema,
   contact_person: z.string().optional(),
   mobile: optionalIndianMobileSchema,
+  email: z.string().optional(),
   city: z.string().optional(),
+  gstin: z.string().optional(),
+  payment_terms: z.string().optional(),
 });
 
 export const customerFormSchema = z.object({
@@ -168,7 +199,10 @@ export const customerFormSchema = z.object({
   name: requiredTextSchema,
   contact_person: z.string().optional(),
   mobile: optionalIndianMobileSchema,
+  email: z.string().optional(),
   city: z.string().optional(),
+  gstin: z.string().optional(),
+  payment_terms: z.string().optional(),
 });
 
 export const salesOrderFormSchema = z.object({
@@ -176,6 +210,7 @@ export const salesOrderFormSchema = z.object({
   so_date: dateStringSchema,
   total_amount: nonNegativeNumberSchema,
   status: requiredTextSchema,
+  payment_status: z.string().optional(),
   remarks: z.string().optional(),
 });
 
@@ -183,6 +218,8 @@ export const dispatchFormSchema = z.object({
   dispatch_number: requiredTextSchema,
   dispatch_date: dateStringSchema,
   vehicle_number: requiredTextSchema,
+  transporter: z.string().optional(),
+  lr_number: z.string().optional(),
   status: requiredTextSchema,
   remarks: z.string().optional(),
 });
@@ -192,6 +229,9 @@ export const maintRequestFormSchema = z.object({
   issue_type: requiredTextSchema,
   description: requiredTextSchema,
   priority: requiredTextSchema,
+  status: requiredTextSchema,
+  loom_id: z.string().optional(),
+  remarks: z.string().optional(),
 });
 
 export const workOrderFormSchema = z.object({
@@ -199,6 +239,9 @@ export const workOrderFormSchema = z.object({
   work_description: requiredTextSchema,
   priority: requiredTextSchema,
   status: requiredTextSchema,
+  labour_hours: nonNegativeNumberSchema.optional(),
+  root_cause: z.string().optional(),
+  resolution: z.string().optional(),
 });
 
 export const pmFormSchema = z.object({
@@ -206,6 +249,8 @@ export const pmFormSchema = z.object({
   name: requiredTextSchema,
   frequency: requiredTextSchema,
   next_due_date: dateStringSchema,
+  estimated_hours: nonNegativeNumberSchema.optional(),
+  remarks: z.string().optional(),
 });
 
 export const employeeFormSchema = z.object({
@@ -214,12 +259,15 @@ export const employeeFormSchema = z.object({
   designation: z.string().optional(),
   department: z.string().optional(),
   mobile: optionalIndianMobileSchema,
+  email: z.string().optional(),
+  date_of_joining: optionalDateStringSchema,
 });
 
 export const attendanceFormSchema = z.object({
   attendance_date: dateStringSchema,
   employee_name: requiredTextSchema,
   status: requiredTextSchema,
+  overtime_hours: nonNegativeNumberSchema.optional(),
 });
 
 export const costingFormSchema = z.object({
@@ -229,6 +277,8 @@ export const costingFormSchema = z.object({
   labour_cost: nonNegativeNumberSchema.optional(),
   power_cost: nonNegativeNumberSchema.optional(),
   overhead_cost: nonNegativeNumberSchema.optional(),
+  maintenance_cost: nonNegativeNumberSchema.optional(),
+  other_cost: nonNegativeNumberSchema.optional(),
   cost_per_meter: nonNegativeNumberSchema,
   meters: nonNegativeNumberSchema,
   remarks: z.string().optional(),
@@ -291,6 +341,37 @@ export const settingsFormSchema = z.object({
   dobby_count: nonNegativeNumberSchema,
   plain_count: nonNegativeNumberSchema,
   address: z.string().optional(),
+});
+
+export const rfqFormSchema = z.object({
+  rfq_number: requiredTextSchema,
+  rfq_date: dateStringSchema,
+  due_date: optionalDateStringSchema,
+  status: requiredTextSchema,
+  remarks: z.string().optional(),
+});
+
+export const quotationFormSchema = z.object({
+  quotation_number: requiredTextSchema,
+  supplier_name: requiredTextSchema,
+  quotation_date: dateStringSchema,
+  valid_until: optionalDateStringSchema,
+  rate: nonNegativeNumberSchema,
+  total_amount: nonNegativeNumberSchema,
+  currency: requiredTextSchema,
+  status: requiredTextSchema,
+  remarks: z.string().optional(),
+});
+
+export const rolePermissionFormSchema = z.object({
+  role: requiredTextSchema,
+  module: requiredTextSchema,
+  can_view: z.union([z.boolean(), z.enum(["true", "false"])]),
+  can_create: z.union([z.boolean(), z.enum(["true", "false"])]),
+  can_edit: z.union([z.boolean(), z.enum(["true", "false"])]),
+  can_delete: z.union([z.boolean(), z.enum(["true", "false"])]),
+  can_approve: z.union([z.boolean(), z.enum(["true", "false"])]),
+  can_export: z.union([z.boolean(), z.enum(["true", "false"])]),
 });
 
 /** Flatten zod issues into field → message map */

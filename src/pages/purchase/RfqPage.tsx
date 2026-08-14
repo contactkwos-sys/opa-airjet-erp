@@ -1,7 +1,7 @@
 import { ModulePage } from "@/components/ModulePage";
 import type { Column } from "@/components/ui";
 import { StatusBadge } from "@/components/ui";
-import { prFormSchema } from "@/lib/validation";
+import { rfqFormSchema } from "@/lib/validation";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -17,9 +17,9 @@ const DOC_STATUS = [
 ];
 
 const columns: Column<Row>[] = [
-  { key: "pr_number", header: "PR #", render: (r) => String(r.pr_number ?? "—") },
-  { key: "request_date", header: "Date", render: (r) => String(r.request_date ?? "—") },
-  { key: "priority", header: "Priority", render: (r) => String(r.priority ?? "—") },
+  { key: "rfq_number", header: "RFQ #", render: (r) => String(r.rfq_number ?? "—") },
+  { key: "rfq_date", header: "RFQ date", render: (r) => String(r.rfq_date ?? "—") },
+  { key: "due_date", header: "Due", render: (r) => String(r.due_date ?? "—") },
   {
     key: "status",
     header: "Status",
@@ -29,20 +29,9 @@ const columns: Column<Row>[] = [
 ];
 
 const fields = [
-  { name: "pr_number", label: "PR number", type: "text" as const, required: true },
-  { name: "request_date", label: "Request date", type: "date" as const, required: true },
-  {
-    name: "priority",
-    label: "Priority",
-    type: "select" as const,
-    required: true,
-    options: [
-      { value: "LOW", label: "LOW" },
-      { value: "NORMAL", label: "NORMAL" },
-      { value: "HIGH", label: "HIGH" },
-      { value: "URGENT", label: "URGENT" },
-    ],
-  },
+  { name: "rfq_number", label: "RFQ number", type: "text" as const, required: true },
+  { name: "rfq_date", label: "RFQ date", type: "date" as const, required: true },
+  { name: "due_date", label: "Due date", type: "date" as const },
   {
     name: "status",
     label: "Status",
@@ -53,23 +42,22 @@ const fields = [
   { name: "remarks", label: "Remarks", type: "textarea" as const },
 ];
 
-export default function PurchaseRequisitionsPage() {
+export default function RfqPage() {
   return (
     <ModulePage
-      title="Purchase Requisitions"
-      subtitle="Indent requests from departments."
-      table="opa_purchase_requisitions"
+      title="Purchase RFQ"
+      subtitle="Request for quotations against requisitions."
+      table="opa_rfqs"
       moduleKey="purchase"
       columns={columns}
       fields={fields}
-      orderBy={{ column: "request_date", ascending: false }}
-      schema={prFormSchema}
+      orderBy={{ column: "rfq_date", ascending: false }}
+      schema={rfqFormSchema}
       createDefaults={() => {
         const d = new Date().toISOString().slice(0, 10);
         return {
-          request_date: d,
-          pr_number: `PR-${d.replace(/-/g, "")}-NEW`,
-          priority: "NORMAL",
+          rfq_date: d,
+          rfq_number: `RFQ-${d.replace(/-/g, "")}-NEW`,
           status: "DRAFT",
         };
       }}

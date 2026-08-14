@@ -7,20 +7,31 @@ type Row = Record<string, unknown> & { id: string };
 const columns: Column<Row>[] = [
   { key: "part_code", header: "Code", render: (r) => String(r.part_code ?? "—") },
   { key: "name", header: "Name", render: (r) => String(r.name ?? r.part_name ?? "—") },
-  { key: "current_qty", header: "Stock", render: (r) => String(r.current_qty ?? r.current_stock ?? "—") },
-  { key: "reorder_level", header: "Reorder", render: (r) => String(r.reorder_level ?? "—") },
+  { key: "category", header: "Category", render: (r) => String(r.category ?? "—") },
+  {
+    key: "current_qty",
+    header: "Stock",
+    render: (r) => String(r.current_qty ?? r.current_stock ?? "—"),
+  },
+  {
+    key: "reorder_level",
+    header: "Reorder",
+    render: (r) => String(r.reorder_level ?? "—"),
+  },
   { key: "uom", header: "UOM", render: (r) => String(r.uom ?? "—") },
 ];
 
 const fields = [
   { name: "part_code", label: "Part code", type: "text" as const, required: true },
   { name: "name", label: "Name", type: "text" as const, required: true },
+  { name: "category", label: "Category", type: "text" as const },
+  { name: "manufacturer", label: "Manufacturer", type: "text" as const },
   { name: "current_qty", label: "Current stock", type: "number" as const, required: true },
   { name: "reorder_level", label: "Reorder level", type: "number" as const, required: true },
   { name: "uom", label: "UOM", type: "text" as const, required: true },
 ];
 
-export default function Page() {
+export default function SparesPage() {
   return (
     <ModulePage
       title="Spares"

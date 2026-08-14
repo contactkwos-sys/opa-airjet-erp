@@ -76,8 +76,19 @@ export function toUserError(err: unknown, fallback = "Something went wrong"): st
 }
 
 function resolveDemo(table: string, options?: ListOptions): Row[] {
-  if (options?.demoRows) return options.demoRows.map((r) => ({ ...r }));
-  return getDemoRows(table);
+  let rows = options?.demoRows
+    ? options.demoRows.map((r) => ({ ...r }))
+    : getDemoRows(table);
+  if (options?.filters) {
+    rows = rows.filter((row) =>
+      Object.entries(options.filters!).every(([key, value]) => {
+        if (value === null) return row[key] == null;
+        return row[key] === value;
+      }),
+    );
+  }
+  if (options?.limit != null) rows = rows.slice(0, options.limit);
+  return rows;
 }
 
 function isDemoModeClient(): boolean {
@@ -185,6 +196,54 @@ export async function getById<T extends Row = Row>(
   }
 }
 
+async function auditCreate(
+  audit: MutateAudit | undefined,
+  recordId: string | undefined,
+  payload: Record<string, unknown>,
+) {
+  if (!audit) return;
+  await writeAuditLog({
+    user_id: audit.user_id,
+    user_name: audit.user_name,
+    action: "CREATE",
+    module: audit.module,
+    record_id: recordId,
+    new_value: payload as AuditPayload["new_value"],
+  });
+}
+
+async function auditUpdate(
+  audit: (MutateAudit & { old_value?: unknown }) | undefined,
+  id: string,
+  payload: Record<string, unknown>,
+) {
+  if (!audit) return;
+  await writeAuditLog({
+    user_id: audit.user_id,
+    user_name: audit.user_name,
+    action: "UPDATE",
+    module: audit.module,
+    record_id: id,
+    old_value: (audit.old_value ?? null) as AuditPayload["old_value"],
+    new_value: payload as AuditPayload["new_value"],
+  });
+}
+
+async function auditDelete(
+  audit: (MutateAudit & { old_value?: unknown }) | undefined,
+  id: string,
+) {
+  if (!audit) return;
+  await writeAuditLog({
+    user_id: audit.user_id,
+    user_name: audit.user_name,
+    action: "DELETE",
+    module: audit.module,
+    record_id: id,
+    old_value: (audit.old_value ?? null) as AuditPayload["old_value"],
+  });
+}
+
 export async function insertRow<T extends Row = Row>(
   table: string,
   payload: Record<string, unknown>,
@@ -199,6 +258,7 @@ export async function insertRow<T extends Row = Row>(
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as unknown as T;
+    await auditCreate(audit, row.id, payload);
     return { data: row, error: null, fromDemo: true };
   }
 
@@ -210,16 +270,7 @@ export async function insertRow<T extends Row = Row>(
       .single();
     if (error) throw error;
 
-    if (audit) {
-      await writeAuditLog({
-        user_id: audit.user_id,
-        user_name: audit.user_name,
-        action: "CREATE",
-        module: audit.module,
-        record_id: (data as { id?: string })?.id,
-        new_value: payload as AuditPayload["new_value"],
-      });
-    }
+    await auditCreate(audit, (data as { id?: string })?.id, payload);
 
     return { data: data as unknown as T, error: null, fromDemo: false };
   } catch (err) {
@@ -230,6 +281,7 @@ export async function insertRow<T extends Row = Row>(
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as unknown as T;
+      await auditCreate(audit, row.id, payload);
       return {
         data: row,
         error: toUserError(err),
@@ -253,11 +305,13 @@ export async function updateRow<T extends Row = Row>(
   const sb = getSupabase();
 
   if (!sb) {
-    return {
-      data: { id, ...payload } as T,
-      error: null,
-      fromDemo: true,
-    };
+    const row = {
+      id,
+      ...payload,
+      updated_at: new Date().toISOString(),
+    } as unknown as T;
+    await auditUpdate(audit, id, payload);
+    return { data: row, error: null, fromDemo: true };
   }
 
   try {
@@ -269,23 +323,19 @@ export async function updateRow<T extends Row = Row>(
       .single();
     if (error) throw error;
 
-    if (audit) {
-      await writeAuditLog({
-        user_id: audit.user_id,
-        user_name: audit.user_name,
-        action: "UPDATE",
-        module: audit.module,
-        record_id: id,
-        old_value: (audit.old_value ?? null) as AuditPayload["old_value"],
-        new_value: payload as AuditPayload["new_value"],
-      });
-    }
+    await auditUpdate(audit, id, payload);
 
     return { data: data as unknown as T, error: null, fromDemo: false };
   } catch (err) {
     if (isMissingTableError(err)) {
+      const row = {
+        id,
+        ...payload,
+        updated_at: new Date().toISOString(),
+      } as unknown as T;
+      await auditUpdate(audit, id, payload);
       return {
-        data: { id, ...payload } as T,
+        data: row,
         error: toUserError(err),
         fromDemo: true,
       };
@@ -293,6 +343,35 @@ export async function updateRow<T extends Row = Row>(
     return {
       data: null,
       error: toUserError(err, "Could not update record"),
+      fromDemo: false,
+    };
+  }
+}
+
+export async function deleteRow(
+  table: string,
+  id: string,
+  audit?: MutateAudit & { old_value?: unknown },
+): Promise<{ error: string | null; fromDemo: boolean }> {
+  const sb = getSupabase();
+
+  if (!sb) {
+    await auditDelete(audit, id);
+    return { error: null, fromDemo: true };
+  }
+
+  try {
+    const { error } = await sb.from(table as "opa_looms").delete().eq("id", id);
+    if (error) throw error;
+    await auditDelete(audit, id);
+    return { error: null, fromDemo: false };
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      await auditDelete(audit, id);
+      return { error: toUserError(err), fromDemo: true };
+    }
+    return {
+      error: toUserError(err, "Could not delete record"),
       fromDemo: false,
     };
   }

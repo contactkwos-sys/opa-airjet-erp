@@ -267,6 +267,20 @@ a {
   margin-bottom: 1.25rem;
 }
 
+.split-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.panel-title {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
 .stat {
   padding: 1.15rem 1.2rem 1.25rem;
   animation: riseIn 0.6s ease both;
@@ -597,6 +611,10 @@ tbody tr:hover {
 @media (max-width: 1100px) {
   .fleet-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .split-panels {
+    grid-template-columns: 1fr;
   }
 
   .production-layout {

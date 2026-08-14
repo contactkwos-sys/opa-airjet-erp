@@ -8,6 +8,7 @@ export { LoadingState, ErrorState, EmptyState } from "./LoadingState";
 export { AlertBanner } from "./AlertBanner";
 export {
   AchievementIndicator,
+  AchievementPct,
   efficiencyLevel,
   type AchievementLevel,
 } from "./AchievementIndicator";

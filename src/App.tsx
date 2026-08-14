@@ -14,6 +14,7 @@ import FactoryFloorPage from "@/pages/FactoryFloorPage";
 import CeoVisitMobilePage from "@/pages/ceo/CeoVisitMobilePage";
 import DailyReportPage from "@/pages/executive/DailyReportPage";
 import AlertsPage from "@/pages/executive/AlertsPage";
+import MisPage from "@/pages/executive/MisPage";
 import PlanningPage from "@/pages/production/PlanningPage";
 import TargetsPage from "@/pages/production/TargetsPage";
 import StoppagesPage from "@/pages/production/StoppagesPage";
@@ -27,6 +28,8 @@ import PurchaseRequisitionsPage from "@/pages/purchase/PurchaseRequisitionsPage"
 import PurchaseOrdersPage from "@/pages/purchase/PurchaseOrdersPage";
 import GrnPage from "@/pages/purchase/GrnPage";
 import SuppliersPage from "@/pages/purchase/SuppliersPage";
+import RfqPage from "@/pages/purchase/RfqPage";
+import QuotationsPage from "@/pages/purchase/QuotationsPage";
 import CustomersPage from "@/pages/sales/CustomersPage";
 import SalesOrdersPage from "@/pages/sales/SalesOrdersPage";
 import DispatchPage from "@/pages/sales/DispatchPage";
@@ -46,6 +49,7 @@ import DocumentsPage from "@/pages/system/DocumentsPage";
 import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
 import AuditPage from "@/pages/system/AuditPage";
+import RolesPage from "@/pages/system/RolesPage";
 
 /* Existing Security module — do not remove */
 import { SecurityDashboard } from "@/modules/security/SecurityDashboard";
@@ -127,6 +131,7 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="mis" element={<MisPage />} />
         <Route path="daily-report" element={<DailyReportPage />} />
         <Route path="factory-floor" element={<FactoryFloorPage />} />
         <Route path="alerts" element={<AlertsPage />} />
@@ -143,6 +148,8 @@ export default function App() {
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="spares" element={<SparesPage />} />
         <Route path="requisitions" element={<PurchaseRequisitionsPage />} />
+        <Route path="rfq" element={<RfqPage />} />
+        <Route path="quotations" element={<QuotationsPage />} />
         <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="grn" element={<GrnPage />} />
         <Route path="suppliers" element={<SuppliersPage />} />
@@ -183,6 +190,7 @@ export default function App() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="roles" element={<RolesPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />

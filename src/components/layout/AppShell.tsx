@@ -12,6 +12,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Executive",
     items: [
       { to: "/", label: "Dashboard", module: "dashboard" },
+      { to: "/mis", label: "MIS", module: "dashboard" },
       { to: "/daily-report", label: "Daily Report", module: "dashboard" },
       { to: "/factory-floor", label: "Factory Floor", module: "production" },
       { to: "/alerts", label: "Alerts", module: "dashboard" },
@@ -45,6 +46,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Purchase",
     items: [
       { to: "/requisitions", label: "Requisitions", module: "purchase" },
+      { to: "/rfq", label: "RFQ", module: "purchase" },
+      { to: "/quotations", label: "Quotations", module: "purchase" },
       { to: "/purchase-orders", label: "PO", module: "purchase" },
       { to: "/grn", label: "GRN", module: "purchase" },
       { to: "/suppliers", label: "Suppliers", module: "purchase" },
@@ -108,6 +111,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/reports", label: "Reports", module: "reports" },
       { to: "/notifications", label: "Notifications", module: "notifications" },
       { to: "/approvals", label: "Approvals", module: "approvals" },
+      { to: "/roles", label: "Roles", module: "settings" },
       { to: "/documents", label: "Documents", module: "documents" },
       { to: "/search", label: "Search", module: "search" },
       { to: "/settings", label: "Settings", module: "settings" },

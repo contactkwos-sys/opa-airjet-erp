@@ -20,6 +20,12 @@ const FORBIDDEN = [
   /\bDELETE\s+FROM\b/i,
 ];
 
+function stripSqlComments(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--.*$/gm, "");
+}
+
 async function main() {
   const files = (await readdir(MIGRATIONS_DIR))
     .filter((f) => f.endsWith(".sql"))
@@ -35,10 +41,11 @@ async function main() {
 
   for (const file of files) {
     const sql = await readFile(path.join(MIGRATIONS_DIR, file), "utf8");
+    const code = stripSqlComments(sql);
     const creates = [...sql.matchAll(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z0-9_.]+)/gi)].map(
       (m) => m[1],
     );
-    const drops = FORBIDDEN.filter((re) => re.test(sql)).map((re) => re.source);
+    const drops = FORBIDDEN.filter((re) => re.test(code)).map((re) => re.source);
 
     console.log(`• ${file}`);
     console.log(`  CREATE TABLE IF NOT EXISTS: ${creates.length ? creates.join(", ") : "(none)"}`);

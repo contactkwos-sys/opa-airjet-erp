@@ -2,7 +2,7 @@
 -- OPA Air Jet ERP — Migration 009: Additive production extensions
 -- Target: NEW project opa-airjet-erp ONLY (never ixulyhomqtajenigopai)
 -- Non-destructive: ADD COLUMN / CREATE IF NOT EXISTS / UPDATE codes only
--- No DROP TABLE / TRUNCATE / DELETE
+-- Does not remove tables, truncate data, or delete rows
 -- =============================================================================
 
 -- Optional role aliases used by UI RBAC (safe if already present)

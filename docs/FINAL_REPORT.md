@@ -91,9 +91,9 @@ Documented in `docs/SECURITY_MODULE.md`. If secrets missing, requests save with 
 
 ## 14. Errors / blockers
 
-1. Cannot apply SQL from this environment (IPv6 DB + missing `DATABASE_URL` / `SUPABASE_ACCESS_TOKEN`).
-2. WhatsApp Edge secrets not injected — architecture ready; deploy secrets manually.
-3. Shared Supabase project already contains unrelated CRM/KWOS/Tantu tables — ERP uses `opa_*` prefix; Security uses its own tables from PR #2.
+1. Previous agent run briefly pointed at wrong shared project `ixulyhomqtajenigopai` — **corrected**: that project must not receive OPA migrations.
+2. Correct production project **OPA AIR JET ERP / opa-airjet-erp** Project URL + publishable key still required before Auth/REST verification and SQL Editor apply.
+3. WhatsApp Edge secrets remain Dashboard/Edge-only — never frontend.
 
 ## 15. Manual configuration required
 

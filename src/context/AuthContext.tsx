@@ -51,11 +51,11 @@ async function fetchProfile(userId: string): Promise<OpaProfile | null> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<OpaProfile | null>(
-    configured ? null : DEMO_PROFILE,
-  );
+  // Start in demo preview so deep links (/production etc.) never bounce to login
+  // while Supabase session is still resolving. Real sessions replace this profile.
+  const [profile, setProfile] = useState<OpaProfile | null>(DEMO_PROFILE);
   const [loading, setLoading] = useState(configured);
-  const demoMode = !configured || (!session && profile?.id === DEMO_PROFILE.id);
+  const demoMode = !session && profile?.id === DEMO_PROFILE.id;
 
   useEffect(() => {
     if (!configured) {

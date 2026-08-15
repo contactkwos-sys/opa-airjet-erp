@@ -1,0 +1,49 @@
+name: Deploy OPA ERP to GitHub Pages
+
+on:
+  push:
+    branches: [main, cursor/production-deploy-54e2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        env:
+          # Frontend-safe publishable credentials for OPA AIR JET ERP (rjpwznapyaegotbswlke)
+          VITE_SUPABASE_URL: https://rjpwznapyaegotbswlke.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_KUnJBpkXDk58YkJ1WekRZA_Alu5LXfO
+          VITE_APP_BASE_URL: https://contactkwos-sys.github.io/opa-airjet-erp
+          VITE_BASE_PATH: /opa-airjet-erp/
+        run: npm run build
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -57,7 +57,18 @@ See `docs/MIGRATION_PLAN.md` and `docs/SUPABASE_CONNECTION.md`.
 
 ## Docs
 
+- `docs/GO_LIVE.md` — **production deploy checklist**
 - `docs/SUPABASE_CONNECTION.md` — CORRECT vs WRONG project
 - `docs/MIGRATION_PLAN.md` — Migration order + SQL Editor pack
 - `docs/SECURITY_MODULE.md` — Visitor / CEO WhatsApp / Gate Pass
 - `docs/FINAL_REPORT.md` — Implementation report
+
+## Production deploy
+
+```bash
+npm run build:pages   # GitHub Pages build
+# or: npm run build   # Vercel / root-domain host
+npm run deploy:edge   # Edge Functions (needs OPA service role + access token)
+```
+
+See `docs/GO_LIVE.md`.

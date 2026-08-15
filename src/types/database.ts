@@ -10,13 +10,16 @@ export type Json =
 
 export type OpaRole =
   | "SUPER_ADMIN"
+  | "ADMIN"
   | "CEO"
   | "DIRECTOR"
   | "FACTORY_MANAGER"
+  | "PRODUCTION_HEAD"
   | "PRODUCTION_MANAGER"
   | "PRODUCTION_SUPERVISOR"
   | "LOOM_OPERATOR"
   | "MAINTENANCE_HEAD"
+  | "MAINTENANCE_ENGINEER"
   | "TECHNICIAN"
   | "STORE_MANAGER"
   | "PURCHASE_MANAGER"
@@ -25,7 +28,8 @@ export type OpaRole =
   | "HR"
   | "SECURITY_HEAD"
   | "SECURITY_GUARD"
-  | "QUALITY_MANAGER";
+  | "QUALITY_MANAGER"
+  | "VIEWER";
 
 export type LoomType = "DOBBY" | "PLAIN";
 export type LoomStatus =
@@ -77,6 +81,7 @@ export interface OpaProfile {
 export interface OpaLoom {
   id: string;
   loom_number: string;
+  loom_code?: string | null;
   loom_type: LoomType;
   make: string | null;
   model: string | null;
@@ -86,6 +91,9 @@ export interface OpaLoom {
   reed: number | null;
   pick: number | null;
   rpm: number | null;
+  production_capacity?: number | null;
+  department?: string | null;
+  operator_name?: string | null;
   motor: string | null;
   controller: string | null;
   dobby_unit: string | null;
@@ -107,6 +115,7 @@ export interface OpaProductionEntry {
   entry_number: string;
   entry_date: string;
   shift_id: string | null;
+  shift_code?: string | null;
   loom_id: string;
   article_id: string | null;
   opening_meter: number;
@@ -117,7 +126,18 @@ export interface OpaProductionEntry {
   downtime_hours: number | null;
   efficiency: number | null;
   operator_id: string | null;
+  operator_name?: string | null;
   supervisor_id: string | null;
+  style?: string | null;
+  design?: string | null;
+  fabric_quality?: string | null;
+  fabric_width?: number | null;
+  gsm?: number | null;
+  warp_count?: string | null;
+  weft_count?: string | null;
+  beam_no?: string | null;
+  waste_kg?: number | null;
+  waste_percentage?: number | null;
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -481,8 +501,15 @@ export interface OpaProductionTarget {
   id: string;
   target_type: string;
   target_date: string;
+  shift_id?: string | null;
+  loom_id?: string | null;
+  loom_type?: string | null;
+  article_id?: string | null;
   target_meter: number;
+  target_kg?: number | null;
   actual_meter: number | null;
+  actual_kg?: number | null;
+  remarks?: string | null;
   created_at: string;
   updated_at: string;
 }

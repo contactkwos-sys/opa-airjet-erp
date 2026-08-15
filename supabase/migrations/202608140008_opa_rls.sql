@@ -621,3 +621,22 @@ BEGIN
     END;
   END LOOP;
 END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Do not expose opa_* tables to the anonymous role
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT tablename
+    FROM pg_tables
+    WHERE schemaname = 'public'
+      AND tablename LIKE 'opa_%'
+  LOOP
+    EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon', r.tablename);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO authenticated', r.tablename);
+  END LOOP;
+END $$;

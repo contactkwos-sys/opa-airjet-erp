@@ -8,8 +8,13 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "test": "npm run test:security",
+    "db:plan": "node scripts/migration-plan.mjs",
     "db:migrate": "node scripts/apply-migrations.mjs",
-    "test:security": "tsx scripts/security-smoke.mts"
+    "supabase:test": "node scripts/supabase-connection-test.mjs",
+    "test:security": "tsx scripts/security-smoke.mts",
+    "deploy:edge": "node scripts/deploy-edge.mjs",
+    "build:pages": "VITE_BASE_PATH=/opa-airjet-erp/ VITE_APP_BASE_URL=https://contactkwos-sys.github.io/opa-airjet-erp npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

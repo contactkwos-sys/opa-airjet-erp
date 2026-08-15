@@ -187,7 +187,7 @@ export function SecuritySettingsPage() {
           CEO_APPROVAL_TOKEN_SECRET, APP_BASE_URL.
         </p>
         <p>
-          Frontend may only use VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Never expose the service
+          Frontend may only use VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY. Never expose the service
           role key or WhatsApp access token in the browser.
         </p>
       </section>

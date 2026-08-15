@@ -12,4 +12,9 @@ export default defineConfig({
       "@": path.resolve(rootDir, "src"),
     },
   },
+  server: {
+    // Allow Cloudflare / localtunnel preview hosts for temporary openable demos
+    allowedHosts: true,
+    host: true,
+  },
 });

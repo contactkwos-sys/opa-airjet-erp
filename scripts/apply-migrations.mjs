@@ -16,7 +16,11 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const MIGRATIONS_DIR = path.join(ROOT, "supabase", "migrations");
-const PROJECT_REF = "ixulyhomqtajenigopai";
+const PROJECT_REF = (
+  process.env.OPA_SUPABASE_PROJECT_REF ||
+  process.env.SUPABASE_PROJECT_REF ||
+  "rjpwznapyaegotbswlke"
+).trim();
 const MANAGEMENT_QUERY_URL = `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`;
 
 function maskSecret(value) {
@@ -121,12 +125,16 @@ async function applyViaManagementApi(token, files) {
 }
 
 async function main() {
-  const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
+  const databaseUrl = (
+    process.env.OPA_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    ""
+  ).trim();
   const accessToken = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
 
   if (!databaseUrl && !accessToken) {
     fail(
-      "Set DATABASE_URL or SUPABASE_ACCESS_TOKEN before running db:migrate",
+      "Set OPA_DATABASE_URL / DATABASE_URL or SUPABASE_ACCESS_TOKEN before running db:migrate",
     );
   }
 

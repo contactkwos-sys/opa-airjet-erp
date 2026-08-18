@@ -54,7 +54,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_hash text;
@@ -62,7 +62,7 @@ DECLARE
   v_label text;
   v_active boolean;
 BEGIN
-  IF p_pin IS NULL OR p_pin !~ '^\d{4}$' THEN
+  IF p_pin IS NULL OR p_pin !~ '^[0-9]{4}$' THEN
     RETURN QUERY SELECT FALSE, NULL::text, NULL::text, NULL::opa_role;
     RETURN;
   END IF;
@@ -96,21 +96,21 @@ GRANT EXECUTE ON FUNCTION opa_verify_role_pin(opa_role, text) TO service_role;
 --   SALES_MANAGER 7777 | ACCOUNTS 7788 | HR 8888 | QUALITY_MANAGER 8899
 --   SECURITY_HEAD 1212 | SECURITY_GUARD 1313 | CEO 1414 | DIRECTOR 1515
 INSERT INTO opa_role_pins (role, pin_hash, label, auth_email) VALUES
-  ('SUPER_ADMIN',           crypt('9999', gen_salt('bf')), 'Super Admin',           'pin.super_admin@opa.internal'),
-  ('CEO',                   crypt('1414', gen_salt('bf')), 'CEO',                   'pin.ceo@opa.internal'),
-  ('DIRECTOR',              crypt('1515', gen_salt('bf')), 'Director',              'pin.director@opa.internal'),
-  ('FACTORY_MANAGER',       crypt('1111', gen_salt('bf')), 'Plant Manager',         'pin.factory_manager@opa.internal'),
-  ('PRODUCTION_MANAGER',    crypt('2222', gen_salt('bf')), 'Production Manager',    'pin.production_manager@opa.internal'),
-  ('PRODUCTION_SUPERVISOR', crypt('3333', gen_salt('bf')), 'Production Supervisor', 'pin.production_supervisor@opa.internal'),
-  ('LOOM_OPERATOR',         crypt('4444', gen_salt('bf')), 'Loom Operator',         'pin.loom_operator@opa.internal'),
-  ('MAINTENANCE_HEAD',      crypt('5555', gen_salt('bf')), 'Maintenance Head',      'pin.maintenance_head@opa.internal'),
-  ('TECHNICIAN',            crypt('5566', gen_salt('bf')), 'Technician',            'pin.technician@opa.internal'),
-  ('STORE_MANAGER',         crypt('6666', gen_salt('bf')), 'Store Manager',         'pin.store_manager@opa.internal'),
-  ('PURCHASE_MANAGER',      crypt('6677', gen_salt('bf')), 'Purchase Manager',      'pin.purchase_manager@opa.internal'),
-  ('SALES_MANAGER',         crypt('7777', gen_salt('bf')), 'Sales Manager',         'pin.sales_manager@opa.internal'),
-  ('ACCOUNTS',              crypt('7788', gen_salt('bf')), 'Accounts',              'pin.accounts@opa.internal'),
-  ('HR',                    crypt('8888', gen_salt('bf')), 'HR',                    'pin.hr@opa.internal'),
-  ('SECURITY_HEAD',         crypt('1212', gen_salt('bf')), 'Security Head',         'pin.security_head@opa.internal'),
-  ('SECURITY_GUARD',        crypt('1313', gen_salt('bf')), 'Security',              'pin.security_guard@opa.internal'),
-  ('QUALITY_MANAGER',       crypt('8899', gen_salt('bf')), 'Quality Manager',       'pin.quality_manager@opa.internal')
+  ('SUPER_ADMIN',           extensions.crypt('9999', extensions.gen_salt('bf')), 'Super Admin',           'pin.super_admin@opa.internal'),
+  ('CEO',                   extensions.crypt('1414', extensions.gen_salt('bf')), 'CEO',                   'pin.ceo@opa.internal'),
+  ('DIRECTOR',              extensions.crypt('1515', extensions.gen_salt('bf')), 'Director',              'pin.director@opa.internal'),
+  ('FACTORY_MANAGER',       extensions.crypt('1111', extensions.gen_salt('bf')), 'Plant Manager',         'pin.factory_manager@opa.internal'),
+  ('PRODUCTION_MANAGER',    extensions.crypt('2222', extensions.gen_salt('bf')), 'Production Manager',    'pin.production_manager@opa.internal'),
+  ('PRODUCTION_SUPERVISOR', extensions.crypt('3333', extensions.gen_salt('bf')), 'Production Supervisor', 'pin.production_supervisor@opa.internal'),
+  ('LOOM_OPERATOR',         extensions.crypt('4444', extensions.gen_salt('bf')), 'Loom Operator',         'pin.loom_operator@opa.internal'),
+  ('MAINTENANCE_HEAD',      extensions.crypt('5555', extensions.gen_salt('bf')), 'Maintenance Head',      'pin.maintenance_head@opa.internal'),
+  ('TECHNICIAN',            extensions.crypt('5566', extensions.gen_salt('bf')), 'Technician',            'pin.technician@opa.internal'),
+  ('STORE_MANAGER',         extensions.crypt('6666', extensions.gen_salt('bf')), 'Store Manager',         'pin.store_manager@opa.internal'),
+  ('PURCHASE_MANAGER',      extensions.crypt('6677', extensions.gen_salt('bf')), 'Purchase Manager',      'pin.purchase_manager@opa.internal'),
+  ('SALES_MANAGER',         extensions.crypt('7777', extensions.gen_salt('bf')), 'Sales Manager',         'pin.sales_manager@opa.internal'),
+  ('ACCOUNTS',              extensions.crypt('7788', extensions.gen_salt('bf')), 'Accounts',              'pin.accounts@opa.internal'),
+  ('HR',                    extensions.crypt('8888', extensions.gen_salt('bf')), 'HR',                    'pin.hr@opa.internal'),
+  ('SECURITY_HEAD',         extensions.crypt('1212', extensions.gen_salt('bf')), 'Security Head',         'pin.security_head@opa.internal'),
+  ('SECURITY_GUARD',        extensions.crypt('1313', extensions.gen_salt('bf')), 'Security',              'pin.security_guard@opa.internal'),
+  ('QUALITY_MANAGER',       extensions.crypt('8899', extensions.gen_salt('bf')), 'Quality Manager',       'pin.quality_manager@opa.internal')
 ON CONFLICT (role) DO NOTHING;

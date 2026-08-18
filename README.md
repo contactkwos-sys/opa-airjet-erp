@@ -12,6 +12,13 @@ npm run dev
 
 Without Supabase credentials the app shows a configuration warning on the login screen and does not fabricate demo data.
 
+## Login
+
+- **Primary:** 4-digit role PIN (Plant Manager, Security, etc.) validated by the `pin-login` Edge Function against `opa_role_pins` hashes — never checked in the frontend.
+- **Fallback:** email/password Super Admin recovery on the same login screen.
+
+Apply migration `202608181200_opa_role_pins.sql` and deploy `supabase/functions/pin-login` before using PIN unlock in production.
+
 ## Environment
 
 ### Frontend (`VITE_*` only)

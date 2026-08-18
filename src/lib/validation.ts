@@ -62,6 +62,15 @@ export const loginFormSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginFormSchema>;
 
+export const pinLoginSchema = z.object({
+  role: z.string().min(1, "Select a role"),
+  pin: z
+    .string()
+    .regex(/^\d{4}$/, "Enter a 4-digit PIN"),
+});
+
+export type PinLoginValues = z.infer<typeof pinLoginSchema>;
+
 export const stoppageFormSchema = z.object({
   loom_id: requiredTextSchema,
   reason: requiredTextSchema,

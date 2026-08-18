@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getSupabase } from "@/lib/supabase";
 import { writeAuditLog } from "@/lib/audit";
-import { buildDemoLooms } from "@/lib/demoData";
 import { listRows, toUserError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { LoomStatus, LoomType, OpaLoom } from "@/types/database";
@@ -16,7 +15,6 @@ import {
   LoadingState,
   ErrorState,
   EmptyState,
-  AlertBanner,
   type Column,
 } from "@/components/ui";
 
@@ -48,23 +46,16 @@ export default function LoomsPage() {
     model: "",
   });
 
-  const [fromDemo, setFromDemo] = useState(false);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     const result = await listRows("opa_looms", {
       orderBy: { column: "loom_number", ascending: true },
       limit: 200,
-      demoRows: buildDemoLooms() as unknown as Array<{ id: string } & Record<string, unknown>>,
     });
-    setLooms((result.data.length ? result.data : buildDemoLooms()) as OpaLoom[]);
-    setFromDemo(result.fromDemo);
-    // Missing tables → demo data only (no blocking error banner)
-    if (result.error && !result.fromDemo) {
+    setLooms(result.data as unknown as OpaLoom[]);
+    if (result.error) {
       setError(toUserError(result.error, "Failed to load looms"));
-    } else {
-      setError(null);
     }
     setLoading(false);
   }, []);
@@ -108,31 +99,7 @@ export default function LoomsPage() {
     const sb = getSupabase();
     const payload = { ...form, is_active: true };
     if (!sb) {
-      setLooms((prev) => [
-        {
-          id: crypto.randomUUID(),
-          ...payload,
-          serial_number: null,
-          installation_date: null,
-          width: null,
-          reed: null,
-          pick: null,
-          rpm: null,
-          motor: null,
-          controller: null,
-          dobby_unit: null,
-          electronic_components: [],
-          current_article: null,
-          current_quality: null,
-          current_operator_id: null,
-          current_shift_id: null,
-          notes: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
-      setOpen(false);
+      setError("Database is not configured. Cannot create loom.");
       setSaving(false);
       return;
     }
@@ -172,12 +139,6 @@ export default function LoomsPage() {
         }
       />
 
-      {fromDemo ? (
-        <AlertBanner tone="info" title="Demo data">
-          Live loom tables are not connected yet. Showing the seeded 72-loom preview.
-        </AlertBanner>
-      ) : null}
-
       <section className="panel table-panel">
         <div className="filters" role="tablist" aria-label="Filter by status">
           {STATUSES.map((s) => (
@@ -206,10 +167,23 @@ export default function LoomsPage() {
 
         {loading ? <LoadingState label="Loading looms…" /> : null}
         {!loading && error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
-        {!loading && filtered.length === 0 ? (
-          <EmptyState title="No looms match filters" action={{ label: "Reset", onClick: () => { setStatusFilter("ALL"); setTypeFilter("ALL"); } }} />
+        {!loading && !error && filtered.length === 0 ? (
+          <EmptyState
+            title={looms.length === 0 ? "No data available" : "No looms match filters"}
+            action={
+              looms.length > 0
+                ? {
+                    label: "Reset",
+                    onClick: () => {
+                      setStatusFilter("ALL");
+                      setTypeFilter("ALL");
+                    },
+                  }
+                : undefined
+            }
+          />
         ) : null}
-        {!loading && filtered.length > 0 ? (
+        {!loading && !error && filtered.length > 0 ? (
           <DataTable
             columns={columns}
             rows={filtered}

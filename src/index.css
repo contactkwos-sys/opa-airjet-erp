@@ -756,18 +756,6 @@ tbody tr:hover {
 .stat.amber .value { color: var(--amber); }
 .stat.sky .value { color: var(--sky); }
 
-.demo-banner {
-  margin: -0.5rem 0.55rem 0;
-  padding: 0.45rem 0.65rem;
-  border-radius: 8px;
-  background: rgba(196, 122, 18, 0.22);
-  color: #ffe8c2;
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
 .nav-toggle {
   display: none;
   border: 1px solid rgba(255, 255, 255, 0.18);

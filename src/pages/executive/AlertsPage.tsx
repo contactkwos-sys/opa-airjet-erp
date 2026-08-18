@@ -11,7 +11,7 @@ import {
 } from "@/components/ui";
 
 export default function AlertsPage() {
-  const { profile, can, demoMode } = useAuth();
+  const { profile, can } = useAuth();
   const canEdit = can("dashboard", "edit") || can("production", "edit");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ export default function AlertsPage() {
 
   async function resolve(row: Row) {
     if (!canEdit) return;
-    const { data, fromDemo } = await updateRow(
+    await updateRow(
       "opa_alerts",
       row.id,
       {
@@ -46,13 +46,7 @@ export default function AlertsPage() {
         old_value: row,
       },
     );
-    if (fromDemo && data) {
-      setRows((list) =>
-        list.map((r) => (r.id === row.id ? { ...r, ...data } : r)),
-      );
-    } else {
-      await load();
-    }
+    await load();
   }
 
   const columns: Column<Row>[] = [
@@ -89,7 +83,6 @@ export default function AlertsPage() {
       <PageHeader
         title="Alerts"
         subtitle="Plant exceptions requiring attention."
-        meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
       />
       <section className="panel table-panel">
         {loading ? <LoadingState /> : null}

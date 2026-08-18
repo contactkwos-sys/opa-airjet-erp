@@ -9,7 +9,6 @@ const LOCAL_ROLES: AppRole[] = [
   "CEO",
   "DIRECTOR",
   "FACTORY_MANAGER",
-  "SUPER_ADMIN",
 ];
 
 export function LoginPage() {
@@ -40,7 +39,8 @@ export function LoginPage() {
         {mode === "local" || !isSupabaseConfigured ? (
           <>
             <div className="banner warn">
-              Running in local auth mode (Supabase not configured). Choose a role to continue testing.
+              Supabase is not configured. Local role entry is for gated testing only — configure
+              Supabase for production.
             </div>
             <label className="field">
               <span>Role</span>

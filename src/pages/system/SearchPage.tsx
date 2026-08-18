@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDemoRows } from "@/lib/demoData";
-import { useAuth } from "@/context/AuthContext";
-import { PageHeader, TextInput } from "@/components/ui";
+import { listRows, type Row } from "@/lib/api";
+import { PageHeader, TextInput, LoadingState, EmptyState } from "@/components/ui";
 
 type Hit = {
   id: string;
@@ -87,18 +86,31 @@ const SOURCES: Array<{
 ];
 
 export default function SearchPage() {
-  const { demoMode } = useAuth();
   const [q, setQ] = useState("");
+  const [hits, setHits] = useState<Hit[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
-  const hits = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (query.length < 2) return [] as Hit[];
+  const runSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim().toLowerCase();
+    if (trimmed.length < 2) {
+      setHits([]);
+      setSearched(false);
+      return;
+    }
+    setLoading(true);
+    setSearched(true);
     const out: Hit[] = [];
-    for (const src of SOURCES) {
-      const rows = getDemoRows(src.table);
+    const results = await Promise.all(
+      SOURCES.map(async (src) => {
+        const result = await listRows(src.table, { limit: 100 });
+        return { src, rows: result.data as Row[] };
+      }),
+    );
+    for (const { src, rows } of results) {
       for (const row of rows) {
         const hay = src.keys.map((k) => String(row[k] ?? "")).join(" ").toLowerCase();
-        if (!hay.includes(query)) continue;
+        if (!hay.includes(trimmed)) continue;
         out.push({
           id: `${src.table}-${row.id}`,
           entity: src.entity,
@@ -108,15 +120,22 @@ export default function SearchPage() {
         });
       }
     }
-    return out.slice(0, 40);
-  }, [q]);
+    setHits(out.slice(0, 40));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void runSearch(q);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [q, runSearch]);
 
   return (
     <>
       <PageHeader
         title="Search"
         subtitle="Global search across looms, partners, documents and visits."
-        meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
       />
       <section className="panel page-card">
         <TextInput
@@ -130,8 +149,10 @@ export default function SearchPage() {
       <section className="panel table-panel">
         {q.trim().length < 2 ? (
           <p className="muted">Type at least 2 characters.</p>
-        ) : hits.length === 0 ? (
-          <p className="muted">No matches.</p>
+        ) : loading ? (
+          <LoadingState label="Searching…" />
+        ) : hits.length === 0 && searched ? (
+          <EmptyState title="No data available" description="No matches for this query." />
         ) : (
           <ul className="search-results">
             {hits.map((h) => (

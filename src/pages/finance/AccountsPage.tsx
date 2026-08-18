@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listRows, type Row } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
 import {
   PageHeader,
   DataTable,
@@ -40,7 +39,6 @@ function withAgeing(rows: Row[]): Row[] {
 }
 
 export default function AccountsPage() {
-  const { demoMode } = useAuth();
   const [ar, setAr] = useState<Row[]>([]);
   const [ap, setAp] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +53,8 @@ export default function AccountsPage() {
     ]);
     setAr(withAgeing(receipts.data));
     setAp(withAgeing(payments.data));
-    if (receipts.error && !receipts.fromDemo) setError(receipts.error);
+    if (receipts.error) setError(receipts.error);
+    else if (payments.error) setError(payments.error);
     setLoading(false);
   }, []);
 
@@ -107,7 +106,6 @@ export default function AccountsPage() {
       <PageHeader
         title="Accounts"
         subtitle="Receivables and payables with ageing buckets."
-        meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
       />
 
       <div className="fleet-grid">

@@ -19,7 +19,7 @@ const ENTITIES = [
 ] as const;
 
 export default function ReportsPage() {
-  const { can, demoMode } = useAuth();
+  const { can } = useAuth();
   const canExport = can("reports", "export") || can("reports", "view");
   const [entity, setEntity] = useState<string>(ENTITIES[0].value);
   const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
@@ -62,7 +62,6 @@ export default function ReportsPage() {
       <PageHeader
         title="Reports"
         subtitle="Filter operational datasets and export CSV."
-        meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
         actions={
           canExport ? (
             <button

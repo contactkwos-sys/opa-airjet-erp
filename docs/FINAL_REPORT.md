@@ -12,14 +12,14 @@
 
 ## 2. New modules created
 
-Executive Dashboard, Daily Report, Factory Floor (72 cards), Alerts, Loom Master + Detail, Production Entry/Planning/Targets/Stoppages, Quality, Yarn/Beams/Greige/Inventory/Spares, Purchase Requisitions/PO/GRN/Suppliers, Customers/Sales Orders/Dispatch, Maintenance Requests/Work Orders/PM, Employees/Attendance, Costing/Accounts/Receivables/Payables, Reports, Notifications, Approvals, Documents, Global Search, Settings, Audit Log, Role permissions, Demo Mode.
+Executive Dashboard, Daily Report, Factory Floor (72 cards), Alerts, Loom Master + Detail, Production Entry/Planning/Targets/Stoppages, Quality, Yarn/Beams/Greige/Inventory/Spares, Purchase Requisitions/PO/GRN/Suppliers, Customers/Sales Orders/Dispatch, Maintenance Requests/Work Orders/PM, Employees/Attendance, Costing/Accounts/Receivables/Payables, Reports, Notifications, Approvals, Documents, Global Search, Settings, Audit Log, Role permissions.
 
 ## 3. Files created (high level)
 
 - `supabase/migrations/202608140001`–`008` (`opa_*` ERP schema, seed, RLS)
 - `supabase/functions/ceo-visit-action/` (compat stub; primary flow uses `ceo-decision`)
 - `scripts/apply-migrations.mjs`
-- `src/context/AuthContext.tsx`, `src/lib/{api,env,permissions,validation,demoData}.ts`
+- `src/context/AuthContext.tsx`, `src/lib/{api,env,permissions,validation}.ts`
 - `src/components/layout/AppShell.tsx`, `src/components/ui/*`, `src/components/charts/*`
 - `src/pages/**` ERP module pages
 - `docs/FINAL_REPORT.md`
@@ -84,7 +84,7 @@ Documented in `docs/SECURITY_MODULE.md`. If secrets missing, requests save with 
 | `npm run build` | PASS |
 | `npm run test:security` | PASS (`SECURITY SMOKE OK`) |
 | Live Supabase `opa_*` apply | **BLOCKED** — DB host IPv6-only / pooler tenant not reachable from this agent; secrets for Management API not provided |
-| Demo Mode ERP UI | Available without Supabase |
+| Empty / error states | No fabricated fallback data |
 | Security local-store mode | Available without Supabase |
 
 ## 14. Errors / blockers

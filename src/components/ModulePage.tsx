@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { insertRow, listRows, type Row } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -35,7 +35,6 @@ type Props = {
   fields: ModuleField[];
   select?: string;
   orderBy?: { column: string; ascending?: boolean };
-  demoRows?: Row[];
   createDefaults?: () => Record<string, unknown>;
   schema?: z.ZodType<unknown>;
   /** Hide create when false; defaults to permission check */
@@ -52,25 +51,21 @@ export function ModulePage({
   fields,
   select = "*",
   orderBy = { column: "created_at", ascending: false },
-  demoRows,
   createDefaults,
   schema,
   allowCreate,
   readOnly = false,
 }: Props) {
-  const { profile, demoMode, can } = useAuth();
+  const { profile, can } = useAuth();
   const canCreate =
     allowCreate ?? (!readOnly && can(moduleKey, "create"));
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const demoRef = useRef(demoRows);
-  demoRef.current = demoRows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,11 +73,9 @@ export function ModulePage({
     const result = await listRows(table, {
       select,
       orderBy,
-      demoRows: demoRef.current,
     });
     setRows(result.data);
-    if (result.error) setInfo(result.error);
-    else if (result.fromDemo) setInfo(null);
+    if (result.error) setError(result.error);
     setLoading(false);
   }, [table, select, orderBy.column, orderBy.ascending]);
 
@@ -143,24 +136,19 @@ export function ModulePage({
       }
     }
 
-    const { data, error: err, fromDemo } = await insertRow(table, rawPayload, {
+    const { data, error: err } = await insertRow(table, rawPayload, {
       module: moduleKey,
       user_id: profile?.id,
       user_name: profile?.full_name,
     });
 
-    if (err && !fromDemo && !data) {
-      setError(err);
+    if (err || !data) {
+      setError(err ?? "Could not save record");
       setSaving(false);
       return;
     }
 
-    if (fromDemo && data) {
-      setRows((r) => [data, ...r]);
-      if (err) setInfo(err);
-    } else {
-      await load();
-    }
+    await load();
     setOpen(false);
     setSaving(false);
   }
@@ -170,13 +158,6 @@ export function ModulePage({
       <PageHeader
         title={title}
         subtitle={subtitle}
-        meta={
-          demoMode || info ? (
-            <span className="live-chip">
-              {demoMode ? "Demo Mode" : info ?? "Live"}
-            </span>
-          ) : null
-        }
         actions={
           canCreate ? (
             <button type="button" className="btn btn-primary" onClick={openCreate}>
@@ -197,14 +178,14 @@ export function ModulePage({
             description={
               canCreate
                 ? "Create the first record to get started."
-                : "No records available for your role."
+                : "No data available."
             }
             action={
               canCreate ? { label: "Create", onClick: openCreate } : undefined
             }
           />
         ) : null}
-        {!loading && rows.length > 0 ? (
+        {!loading && !error && rows.length > 0 ? (
           <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} />
         ) : null}
       </section>

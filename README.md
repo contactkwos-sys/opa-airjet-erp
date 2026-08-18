@@ -10,7 +10,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Without Supabase credentials the app runs in **Demo Mode** (ERP) / **local store** (Security) so workflows can be exercised without a live database.
+Without Supabase credentials the app shows a configuration warning on the login screen and does not fabricate demo data.
 
 ## Environment
 

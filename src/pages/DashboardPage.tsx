@@ -4,7 +4,6 @@ import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import { listRows } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
-import { buildDemoLooms, demoKpis } from "@/lib/demoData";
 import type {
   LoomStatus,
   OpaAlert,
@@ -19,11 +18,31 @@ import {
   LoadingState,
   AchievementIndicator,
   efficiencyLevel,
-  AlertBanner,
+  EmptyState,
+  ErrorState,
 } from "@/components/ui";
 import { TrendChart, BarChartCard, PieChartCard } from "@/components/charts";
 
-type DashboardKpis = typeof demoKpis;
+type DashboardKpis = {
+  fleet: { total: number; running: number; stopped: number; breakdown: number };
+  production: { target: number; actual: number; efficiency: number; dobby: number; plain: number };
+  operations: {
+    breakdownToday: number;
+    maintenancePending: number;
+    lowStockItems: number;
+    purchasePending: number;
+    securityAlerts: number;
+  };
+  rejectionPct: number;
+  downtimeHours: number;
+  costPerMeter: number;
+  inventoryValueLakh: number;
+  purchasePendingValue: number;
+  visitorsToday: number;
+  ceoMeetingsPending: number;
+  dispatchMeters: number;
+  receivablesLakh: number;
+};
 
 function formatMeters(n: number) {
   return `${n.toLocaleString("en-IN")} M`;
@@ -176,7 +195,6 @@ async function countRows(
     select: "id",
     filters,
     limit: 500,
-    demoFallback: false,
   });
   if (result.error) return 0;
   return result.data.length;
@@ -191,7 +209,6 @@ async function sumColumn(
     select: column,
     filters,
     limit: 500,
-    demoFallback: false,
   });
   if (result.error) return 0;
   return result.data.reduce((s, row) => s + Number(row[column] ?? 0), 0);
@@ -203,7 +220,7 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState<OpaAlert[]>([]);
   const [kpis, setKpis] = useState<DashboardKpis>(() => emptyLiveKpis(0));
   const [loading, setLoading] = useState(true);
-  const [usingDemo, setUsingDemo] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -212,44 +229,15 @@ export default function DashboardPage() {
 
     async function load() {
       setLoading(true);
+      setError(null);
       const sb = getSupabase();
 
-      // Seeded demo only when there is no authenticated Supabase session
       if (!sb || !session) {
         if (!cancelled) {
-          setLooms(buildDemoLooms());
-          setAlerts([
-            {
-              id: "a1",
-              type: "BREAKDOWN",
-              severity: "HIGH",
-              title: "Loom breakdown — PLAIN LOOM 46",
-              body: "Mechanical fault reported on Shed B",
-              module: "looms",
-              record_id: null,
-              is_resolved: false,
-              resolved_at: null,
-              resolved_by: null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            {
-              id: "a2",
-              type: "STOCK",
-              severity: "MEDIUM",
-              title: "Low spare stock",
-              body: "12 items below reorder level",
-              module: "inventory",
-              record_id: null,
-              is_resolved: false,
-              resolved_at: null,
-              resolved_by: null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-          ]);
-          setKpis(demoKpis);
-          setUsingDemo(true);
+          setLooms([]);
+          setAlerts([]);
+          setKpis(emptyLiveKpis(0));
+          setError("No data available. Sign in with a configured database connection.");
           setLoading(false);
         }
         return;
@@ -264,31 +252,30 @@ export default function DashboardPage() {
             orderBy: { column: "loom_number", ascending: true },
             filters: { is_active: true },
             limit: 200,
-            demoFallback: false,
           }),
           listRows("opa_alerts", {
             select: "*",
             orderBy: { column: "created_at", ascending: false },
             filters: { is_resolved: false },
             limit: 8,
-            demoFallback: false,
           }),
           listRows("opa_production_entries", {
             select: "*",
             orderBy: { column: "entry_date", ascending: false },
             filters: { entry_date: today },
             limit: 500,
-            demoFallback: false,
           }),
           listRows("opa_production_targets", {
             select: "*",
             filters: { target_date: today },
             limit: 200,
-            demoFallback: false,
           }),
         ]);
 
         if (cancelled) return;
+
+        const firstError = [loomRes, alertRes, entryRes, targetRes].find((r) => r.error)?.error ?? null;
+        if (firstError) setError(firstError);
 
         const liveLooms = loomRes.data as unknown as OpaLoom[];
         const liveAlerts = alertRes.data as unknown as OpaAlert[];
@@ -297,7 +284,6 @@ export default function DashboardPage() {
 
         setLooms(liveLooms);
         setAlerts(liveAlerts);
-        setUsingDemo(false);
 
         const [
           maintenancePending,
@@ -319,7 +305,6 @@ export default function DashboardPage() {
             select: "current_qty,reorder_level,unit_cost",
             filters: { is_active: true },
             limit: 500,
-            demoFallback: false,
           }),
           sumColumn("opa_purchase_orders", "total_amount", { payment_status: "PENDING" }),
           sumColumn("opa_dispatch_items", "quantity"),
@@ -381,7 +366,7 @@ export default function DashboardPage() {
           setLooms([]);
           setAlerts([]);
           setKpis(emptyLiveKpis(0));
-          setUsingDemo(false);
+          setError("Could not load dashboard data.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -449,10 +434,13 @@ export default function DashboardPage() {
         meta={<LiveClock />}
       />
 
-      {usingDemo ? (
-        <AlertBanner tone="info" title="Demo Mode KPIs">
-          Showing seeded demo figures until you sign in to Supabase for live loom data.
-        </AlertBanner>
+      {error ? <ErrorState message={error} /> : null}
+
+      {!error && looms.length === 0 && k.fleet.total === 0 && k.production.actual === 0 ? (
+        <EmptyState
+          title="No data available"
+          description="No loom or production records were returned for today."
+        />
       ) : null}
 
       <div className="section-head">

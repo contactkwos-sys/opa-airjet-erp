@@ -117,7 +117,7 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 export function AppShell() {
-  const { profile, demoMode, signOut, can } = useAuth();
+  const { profile, signOut, can } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -139,12 +139,6 @@ export function AppShell() {
           <h1>OPA Group of India</h1>
           <p>Air Jet Loom ERP</p>
         </div>
-
-        {demoMode ? (
-          <div className="demo-banner" role="status">
-            Demo Mode · SUPER_ADMIN preview
-          </div>
-        ) : null}
 
         <button
           type="button"

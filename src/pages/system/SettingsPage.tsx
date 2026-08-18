@@ -37,7 +37,7 @@ const empty: Settings = {
 };
 
 export default function SettingsPage() {
-  const { profile, can, demoMode } = useAuth();
+  const { profile, can } = useAuth();
   const canEdit = can("settings", "edit");
   const [form, setForm] = useState<Settings>(empty);
   const [loading, setLoading] = useState(true);
@@ -112,7 +112,7 @@ export default function SettingsPage() {
         user_name: profile?.full_name,
       });
     }
-    setMessage(demoMode ? "Saved locally (Demo Mode)." : "Settings saved.");
+    setMessage("Settings saved.");
     setSaving(false);
   }
 
@@ -123,7 +123,6 @@ export default function SettingsPage() {
       <PageHeader
         title="Settings"
         subtitle="Company, factory loom counts, shifts and WhatsApp configuration."
-        meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
       />
 
       {message ? <AlertBanner tone="info" title={message} /> : null}

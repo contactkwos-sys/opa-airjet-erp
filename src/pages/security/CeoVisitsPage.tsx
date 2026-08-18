@@ -24,7 +24,7 @@ import {
 const PIPELINE = ["PENDING", "APPROVED", "REJECTED", "RESCHEDULED", "COMPLETED"] as const;
 
 export default function CeoVisitsPage() {
-  const { profile, can, demoMode } = useAuth();
+  const { profile, can } = useAuth();
   const canCreate = can("security", "create");
   const canEdit = can("security", "edit");
   const [rows, setRows] = useState<Row[]>([]);
@@ -52,7 +52,7 @@ export default function CeoVisitsPage() {
       orderBy: { column: "requested_at", ascending: false },
     });
     setRows(result.data);
-    if (result.error && !result.fromDemo) setError(result.error);
+    if (result.error) setError(result.error);
     setLoading(false);
   }, []);
 
@@ -81,7 +81,7 @@ export default function CeoVisitsPage() {
       setSaving(false);
       return;
     }
-    const { data, error: err, fromDemo } = await insertRow(
+    const { data, error: err } = await insertRow(
       "opa_ceo_visit_requests",
       payload,
       {
@@ -90,20 +90,19 @@ export default function CeoVisitsPage() {
         user_name: profile?.full_name,
       },
     );
-    if (err && !fromDemo && !data) {
-      setError(err);
+    if (err || !data) {
+      setError(err ?? "Could not create visit request");
       setSaving(false);
       return;
     }
-    if (fromDemo && data) setRows((r) => [data, ...r]);
-    else await load();
+    await load();
     setOpen(false);
     setSaving(false);
   }
 
   async function setStatus(row: Row, status: string) {
     if (!canEdit) return;
-    const { data, fromDemo } = await updateRow(
+    const { error: err } = await updateRow(
       "opa_ceo_visit_requests",
       row.id,
       { status, ceo_response_at: new Date().toISOString() },
@@ -114,13 +113,8 @@ export default function CeoVisitsPage() {
         old_value: row,
       },
     );
-    if (fromDemo && data) {
-      setRows((list) =>
-        list.map((r) => (r.id === row.id ? { ...r, ...data } : r)),
-      );
-    } else {
-      await load();
-    }
+    if (err) setError(err);
+    else await load();
   }
 
   async function notifyWhatsApp(row: Row) {
@@ -210,12 +204,7 @@ export default function CeoVisitsPage() {
       <PageHeader
         title="CEO Visits"
         subtitle="Create visit requests, advance status, and notify CEO via WhatsApp."
-        meta={
-          <span className="live-chip">
-            {demoMode ? "Demo Mode · " : ""}
-            {pending} pending
-          </span>
-        }
+        meta={<span className="live-chip">{pending} pending</span>}
         actions={
           canCreate ? (
             <button

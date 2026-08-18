@@ -6,7 +6,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 import { TextInput, AlertBanner } from "@/components/ui";
 
 export default function LoginPage() {
-  const { signIn, session, demoMode, loading } = useAuth();
+  const { signIn, session, loading } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,11 +46,11 @@ export default function LoginPage() {
           <p>Air Jet Loom ERP</p>
         </div>
 
-        {!isSupabaseConfigured() || demoMode ? (
+        {!isSupabaseConfigured() ? (
           <AlertBanner
             tone="warning"
-            title="Demo Mode"
-            children="Supabase anon key not configured. Sign-in will open the SUPER_ADMIN preview."
+            title="Configuration required"
+            children="Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable sign-in."
           />
         ) : null}
 
@@ -72,23 +72,14 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           {error ? <p className="form-error">{error}</p> : null}
-          <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={submitting || !isSupabaseConfigured()}
+          >
             {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        {!isSupabaseConfigured() ? (
-          <button
-            type="button"
-            className="btn btn-ghost btn-block"
-            onClick={async () => {
-              await signIn("demo@opa.local", "demo");
-              navigate("/");
-            }}
-          >
-            Continue in Demo Mode
-          </button>
-        ) : null}
       </div>
     </div>
   );

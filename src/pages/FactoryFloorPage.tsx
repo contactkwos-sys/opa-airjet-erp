@@ -1,38 +1,49 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getSupabase } from "@/lib/supabase";
-import { buildDemoLooms } from "@/lib/demoData";
 import type { LoomStatus, OpaLoom } from "@/types/database";
 import {
   PageHeader,
   LoadingState,
   StatusBadge,
   StatCard,
+  EmptyState,
+  ErrorState,
 } from "@/components/ui";
 
 export default function FactoryFloorPage() {
   const [looms, setLooms] = useState<OpaLoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<LoomStatus | "ALL">("ALL");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setError(null);
       const sb = getSupabase();
       if (!sb) {
         if (!cancelled) {
-          setLooms(buildDemoLooms());
+          setLooms([]);
+          setError("Database is not configured. No data available.");
           setLoading(false);
         }
         return;
       }
       try {
-        const { data } = await sb.from("opa_looms").select("*").order("loom_number");
+        const { data, error: err } = await sb
+          .from("opa_looms")
+          .select("*")
+          .order("loom_number");
+        if (err) throw err;
         if (!cancelled) {
-          setLooms(data?.length ? (data as OpaLoom[]) : buildDemoLooms());
+          setLooms((data as OpaLoom[]) ?? []);
         }
-      } catch {
-        if (!cancelled) setLooms(buildDemoLooms());
+      } catch (e) {
+        if (!cancelled) {
+          setLooms([]);
+          setError(e instanceof Error ? e.message : "Could not load looms");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -58,7 +69,7 @@ export default function FactoryFloorPage() {
     <>
       <PageHeader
         title="Factory Floor"
-        subtitle="Live shed board — 72 loom cards with status colours."
+        subtitle="Live shed board — loom cards with status colours."
       />
 
       <div className="fleet-grid">
@@ -85,6 +96,17 @@ export default function FactoryFloorPage() {
 
       {loading ? (
         <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          title="No data available"
+          description={
+            looms.length === 0
+              ? "No looms were returned from the database."
+              : "No looms match this filter."
+          }
+        />
       ) : (
         <div className="floor-grid">
           {visible.map((loom) => (

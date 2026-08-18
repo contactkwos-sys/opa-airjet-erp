@@ -1,28 +1,46 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listRows, type Row } from "@/lib/api";
-import { buildDemoLooms, buildDemoProductionEntries, demoKpis } from "@/lib/demoData";
-import { useAuth } from "@/context/AuthContext";
 import {
   PageHeader,
   StatCard,
   DataTable,
   LoadingState,
+  ErrorState,
+  EmptyState,
   type Column,
 } from "@/components/ui";
 
 export default function DailyReportPage() {
-  const { demoMode } = useAuth();
   const [entries, setEntries] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [rejectionPct, setRejectionPct] = useState(0);
   const today = new Date().toISOString().slice(0, 10);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await listRows("opa_production_entries", {
-      orderBy: { column: "entry_date", ascending: false },
-      demoRows: buildDemoProductionEntries(buildDemoLooms()) as unknown as Row[],
-    });
-    setEntries(result.data.filter((e) => String(e.entry_date) === today));
+    setError(null);
+    const [entryRes, failRes, passRes] = await Promise.all([
+      listRows("opa_production_entries", {
+        orderBy: { column: "entry_date", ascending: false },
+      }),
+      listRows("opa_quality_inspections", {
+        select: "id",
+        filters: { result: "FAIL" },
+        limit: 500,
+      }),
+      listRows("opa_quality_inspections", {
+        select: "id",
+        filters: { result: "PASS" },
+        limit: 500,
+      }),
+    ]);
+    if (entryRes.error) setError(entryRes.error);
+    setEntries(entryRes.data.filter((e) => String(e.entry_date) === today));
+    const qcTotal = failRes.data.length + passRes.data.length;
+    setRejectionPct(
+      qcTotal > 0 ? Math.round((failRes.data.length / qcTotal) * 1000) / 10 : 0,
+    );
     setLoading(false);
   }, [today]);
 
@@ -34,7 +52,7 @@ export default function DailyReportPage() {
     const meters = entries.reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
     const eff =
       entries.length === 0
-        ? demoKpis.production.efficiency
+        ? 0
         : entries.reduce((s, e) => s + Number(e.efficiency ?? 0), 0) /
           entries.length;
     return { meters, eff, count: entries.length };
@@ -60,7 +78,6 @@ export default function DailyReportPage() {
       <PageHeader
         title="Daily Report"
         subtitle={`Shift and day-end production summary · ${today}`}
-        meta={demoMode ? <span className="live-chip">Demo Mode</span> : null}
       />
       <div className="fleet-grid">
         <StatCard label="Entries" value={summary.count} />
@@ -69,14 +86,22 @@ export default function DailyReportPage() {
           value={summary.meters.toLocaleString("en-IN")}
         />
         <StatCard label="Avg efficiency" value={`${summary.eff.toFixed(1)}%`} />
-        <StatCard label="Rejection" value={`${demoKpis.rejectionPct}%`} />
+        <StatCard label="Rejection" value={`${rejectionPct}%`} />
       </div>
       <section className="panel table-panel">
-        {loading ? (
-          <LoadingState />
-        ) : (
+        {loading ? <LoadingState /> : null}
+        {!loading && error ? (
+          <ErrorState message={error} onRetry={() => void load()} />
+        ) : null}
+        {!loading && !error && entries.length === 0 ? (
+          <EmptyState
+            title="No data available"
+            description="No production entries for today."
+          />
+        ) : null}
+        {!loading && !error && entries.length > 0 ? (
           <DataTable columns={columns} rows={entries} rowKey={(r) => r.id} />
-        )}
+        ) : null}
       </section>
     </>
   );

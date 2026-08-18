@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getSupabase } from "@/lib/supabase";
 import { writeAuditLog } from "@/lib/audit";
-import { buildDemoLooms } from "@/lib/demoData";
 import { useAuth } from "@/context/AuthContext";
 import type { LoomStatus, OpaLoom } from "@/types/database";
 import {
@@ -26,11 +25,12 @@ export default function LoomDetailPage() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      setError(null);
       const sb = getSupabase();
       if (!sb) {
-        const demo = buildDemoLooms().find((l) => l.id === id) ?? buildDemoLooms()[0];
         if (!cancelled) {
-          setLoom(demo);
+          setLoom(null);
+          setError("Database is not configured. No data available.");
           setLoading(false);
         }
         return;
@@ -45,15 +45,14 @@ export default function LoomDetailPage() {
         if (!cancelled) {
           if (data) setLoom(data as OpaLoom);
           else {
-            const demo = buildDemoLooms().find((l) => l.id === id);
-            setLoom(demo ?? null);
-            if (!demo) setError("Loom not found");
+            setLoom(null);
+            setError("Loom not found");
           }
         }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load");
-          setLoom(buildDemoLooms().find((l) => l.id === id) ?? null);
+          setLoom(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -72,6 +71,8 @@ export default function LoomDetailPage() {
     setLoom({ ...loom, status });
     const sb = getSupabase();
     if (!sb) {
+      setError("Database is not configured. Cannot update.");
+      setLoom({ ...loom, status: prev });
       setSaving(false);
       return;
     }
@@ -111,7 +112,7 @@ export default function LoomDetailPage() {
     return (
       <>
         <PageHeader title="Loom detail" subtitle="Not found" />
-        <ErrorState message={error ?? "Loom not found"} />
+        <ErrorState message={error ?? "No data available"} />
         <p>
           <Link to="/looms">Back to looms</Link>
         </p>

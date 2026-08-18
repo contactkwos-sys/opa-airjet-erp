@@ -6,26 +6,11 @@ import { hasPermission, type ModuleKey, type PermissionAction } from "@/lib/perm
 import type { OpaProfile, OpaRole } from "@/types/database";
 import { writeAuditLog } from "@/lib/audit";
 
-const DEMO_PROFILE: OpaProfile = {
-  id: "00000000-0000-4000-8000-000000000001",
-  email: "demo@opa.local",
-  full_name: "Demo Super Admin",
-  role: "SUPER_ADMIN",
-  department_id: null,
-  employee_id: "DEMO-001",
-  mobile: null,
-  is_active: true,
-  permissions: {},
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
 type AuthContextValue = {
   session: Session | null;
   profile: OpaProfile | null;
   role: OpaRole | null;
   loading: boolean;
-  demoMode: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   can: (module: ModuleKey, action?: PermissionAction) => boolean;
@@ -51,22 +36,21 @@ async function fetchProfile(userId: string): Promise<OpaProfile | null> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [session, setSession] = useState<Session | null>(null);
-  // Start in demo preview so deep links (/production etc.) never bounce to login
-  // while Supabase session is still resolving. Real sessions replace this profile.
-  const [profile, setProfile] = useState<OpaProfile | null>(DEMO_PROFILE);
-  const [loading, setLoading] = useState(configured);
-  const demoMode = !session && profile?.id === DEMO_PROFILE.id;
+  const [profile, setProfile] = useState<OpaProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!configured) {
-      setProfile(DEMO_PROFILE);
+      setSession(null);
+      setProfile(null);
       setLoading(false);
       return;
     }
 
     const sb = getSupabase();
     if (!sb) {
-      setProfile(DEMO_PROFILE);
+      setSession(null);
+      setProfile(null);
       setLoading(false);
       return;
     }
@@ -82,12 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const p = await fetchProfile(data.session.user.id);
           if (!cancelled) setProfile(p);
         } else {
-          // Offline / no session → demo preview
-          setProfile(DEMO_PROFILE);
+          setProfile(null);
         }
       })
       .catch(() => {
-        if (!cancelled) setProfile(DEMO_PROFILE);
+        if (!cancelled) {
+          setSession(null);
+          setProfile(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -98,10 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (next?.user) {
         const p = await fetchProfile(next.user.id);
         setProfile(p);
-      } else if (!isSupabaseConfigured()) {
-        setProfile(DEMO_PROFILE);
       } else {
-        setProfile(DEMO_PROFILE);
+        setProfile(null);
       }
     });
 
@@ -114,8 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const sb = getSupabase();
     if (!sb) {
-      setProfile(DEMO_PROFILE);
-      return { error: null };
+      return { error: "Database is not configured. Cannot sign in." };
     }
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
@@ -144,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (sb) await sb.auth.signOut();
     setSession(null);
-    setProfile(isSupabaseConfigured() ? DEMO_PROFILE : DEMO_PROFILE);
+    setProfile(null);
   }, [profile]);
 
   const role = profile?.role ?? null;
@@ -161,12 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       role,
       loading,
-      demoMode: Boolean(demoMode),
       signIn,
       signOut,
       can,
     }),
-    [session, profile, role, loading, demoMode, signIn, signOut, can],
+    [session, profile, role, loading, signIn, signOut, can],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

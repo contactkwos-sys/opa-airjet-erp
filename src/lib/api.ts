@@ -1,12 +1,10 @@
 /**
  * Typed data-access helpers for opa_* tables.
- * Falls back to demo data when Demo Mode is on or tables are missing (PGRST205).
+ * Never fabricates rows — empty results and errors surface to the UI.
  */
 
 import { getSupabase } from "./supabase";
-import { isSupabaseConfigured } from "./env";
 import { writeAuditLog, type AuditPayload } from "./audit";
-import { getDemoRows } from "./demoData";
 
 export type Row = Record<string, unknown> & { id: string };
 
@@ -15,9 +13,6 @@ export type ListOptions = {
   orderBy?: { column: string; ascending?: boolean };
   filters?: Record<string, string | number | boolean | null>;
   limit?: number;
-  /** When true (default), return demo rows if offline / table missing */
-  demoFallback?: boolean;
-  demoRows?: Row[];
 };
 
 export type MutateAudit = {
@@ -57,7 +52,7 @@ export function toUserError(err: unknown, fallback = "Something went wrong"): st
 
   const e = err as { code?: string; message?: string; status?: number };
   if (isMissingTableError(err)) {
-    return "This module is not connected yet. Showing demo data.";
+    return "This module is not connected yet. No data available.";
   }
   if (e.code === "PGRST116") return "Record not found.";
   if (e.code === "23505") return "A record with this code already exists.";
@@ -69,33 +64,22 @@ export function toUserError(err: unknown, fallback = "Something went wrong"): st
     return "Your session expired. Please sign in again.";
   }
   if (e.message?.toLowerCase().includes("fetch") || e.message?.toLowerCase().includes("network")) {
-    return "Network unavailable. Working with local demo data.";
+    return "Network unavailable. Please try again.";
   }
   // Never surface raw SQL / PostgREST dumps
   return fallback;
 }
 
-function resolveDemo(table: string, options?: ListOptions): Row[] {
-  if (options?.demoRows) return options.demoRows.map((r) => ({ ...r }));
-  return getDemoRows(table);
-}
-
-function isDemoModeClient(): boolean {
-  return !isSupabaseConfigured() || !getSupabase();
-}
-
 export async function listRows<T extends Row = Row>(
   table: string,
   options: ListOptions = {},
-): Promise<{ data: T[]; error: string | null; fromDemo: boolean }> {
-  const demoFallback = options.demoFallback !== false;
+): Promise<{ data: T[]; error: string | null }> {
   const sb = getSupabase();
 
-  if (!sb || isDemoModeClient()) {
+  if (!sb) {
     return {
-      data: resolveDemo(table, options) as T[],
-      error: null,
-      fromDemo: true,
+      data: [],
+      error: "Database is not configured. No data available.",
     };
   }
 
@@ -117,34 +101,11 @@ export async function listRows<T extends Row = Row>(
     const { data, error } = await q;
     if (error) throw error;
 
-    if (!data?.length && demoFallback) {
-      return {
-        data: resolveDemo(table, options) as T[],
-        error: null,
-        fromDemo: true,
-      };
-    }
-
-    return { data: (data as unknown as T[]) ?? [], error: null, fromDemo: false };
+    return { data: (data as unknown as T[]) ?? [], error: null };
   } catch (err) {
-    if (demoFallback && isMissingTableError(err)) {
-      return {
-        data: resolveDemo(table, options) as T[],
-        error: null,
-        fromDemo: true,
-      };
-    }
-    if (demoFallback) {
-      return {
-        data: resolveDemo(table, options) as T[],
-        error: toUserError(err, "Could not load records"),
-        fromDemo: true,
-      };
-    }
     return {
       data: [],
       error: toUserError(err, "Could not load records"),
-      fromDemo: false,
     };
   }
 }
@@ -152,15 +113,15 @@ export async function listRows<T extends Row = Row>(
 export async function getById<T extends Row = Row>(
   table: string,
   id: string,
-  options: { select?: string; demoFallback?: boolean; demoRows?: Row[] } = {},
-): Promise<{ data: T | null; error: string | null; fromDemo: boolean }> {
-  const demoFallback = options.demoFallback !== false;
+  options: { select?: string } = {},
+): Promise<{ data: T | null; error: string | null }> {
   const sb = getSupabase();
 
   if (!sb) {
-    const row =
-      resolveDemo(table, options).find((r) => r.id === id) ?? null;
-    return { data: row as T | null, error: null, fromDemo: true };
+    return {
+      data: null,
+      error: "Database is not configured. No data available.",
+    };
   }
 
   try {
@@ -170,18 +131,9 @@ export async function getById<T extends Row = Row>(
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
-    return { data: (data as unknown as T) ?? null, error: null, fromDemo: false };
+    return { data: (data as unknown as T) ?? null, error: null };
   } catch (err) {
-    if (demoFallback) {
-      const row =
-        resolveDemo(table, options).find((r) => r.id === id) ?? null;
-      return {
-        data: row as T | null,
-        error: toUserError(err),
-        fromDemo: true,
-      };
-    }
-    return { data: null, error: toUserError(err), fromDemo: false };
+    return { data: null, error: toUserError(err) };
   }
 }
 
@@ -189,17 +141,14 @@ export async function insertRow<T extends Row = Row>(
   table: string,
   payload: Record<string, unknown>,
   audit?: MutateAudit,
-): Promise<{ data: T | null; error: string | null; fromDemo: boolean }> {
+): Promise<{ data: T | null; error: string | null }> {
   const sb = getSupabase();
 
   if (!sb) {
-    const row = {
-      id: crypto.randomUUID(),
-      ...payload,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as unknown as T;
-    return { data: row, error: null, fromDemo: true };
+    return {
+      data: null,
+      error: "Database is not configured. Cannot save.",
+    };
   }
 
   try {
@@ -221,25 +170,11 @@ export async function insertRow<T extends Row = Row>(
       });
     }
 
-    return { data: data as unknown as T, error: null, fromDemo: false };
+    return { data: data as unknown as T, error: null };
   } catch (err) {
-    if (isMissingTableError(err)) {
-      const row = {
-        id: crypto.randomUUID(),
-        ...payload,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as unknown as T;
-      return {
-        data: row,
-        error: toUserError(err),
-        fromDemo: true,
-      };
-    }
     return {
       data: null,
       error: toUserError(err, "Could not save record"),
-      fromDemo: false,
     };
   }
 }
@@ -249,14 +184,13 @@ export async function updateRow<T extends Row = Row>(
   id: string,
   payload: Record<string, unknown>,
   audit?: MutateAudit & { old_value?: unknown },
-): Promise<{ data: T | null; error: string | null; fromDemo: boolean }> {
+): Promise<{ data: T | null; error: string | null }> {
   const sb = getSupabase();
 
   if (!sb) {
     return {
-      data: { id, ...payload } as T,
-      error: null,
-      fromDemo: true,
+      data: null,
+      error: "Database is not configured. Cannot update.",
     };
   }
 
@@ -281,19 +215,11 @@ export async function updateRow<T extends Row = Row>(
       });
     }
 
-    return { data: data as unknown as T, error: null, fromDemo: false };
+    return { data: data as unknown as T, error: null };
   } catch (err) {
-    if (isMissingTableError(err)) {
-      return {
-        data: { id, ...payload } as T,
-        error: toUserError(err),
-        fromDemo: true,
-      };
-    }
     return {
       data: null,
       error: toUserError(err, "Could not update record"),
-      fromDemo: false,
     };
   }
 }
@@ -310,18 +236,7 @@ export async function softDeactivate(
     { is_active: false },
     audit ? { ...audit } : undefined,
   );
-  if (result.error && !result.fromDemo) return { error: result.error };
-  if (audit && result.fromDemo) {
-    await writeAuditLog({
-      user_id: audit.user_id,
-      user_name: audit.user_name,
-      action: "SOFT_DELETE",
-      module: audit.module,
-      record_id: id,
-      new_value: { is_active: false },
-    });
-  }
-  return { error: null };
+  return { error: result.error };
 }
 
 export async function softActivate(
@@ -335,10 +250,10 @@ export async function softActivate(
     { is_active: true },
     audit ? { ...audit } : undefined,
   );
-  return { error: result.error && !result.fromDemo ? result.error : null };
+  return { error: result.error };
 }
 
-/** Invoke a Supabase Edge Function; demo-safe when offline. */
+/** Invoke a Supabase Edge Function. */
 export async function invokeEdgeFunction<T = unknown>(
   name: string,
   body: Record<string, unknown>,
@@ -346,8 +261,8 @@ export async function invokeEdgeFunction<T = unknown>(
   const sb = getSupabase();
   if (!sb) {
     return {
-      data: { ok: true, demo: true, function: name } as T,
-      error: null,
+      data: null,
+      error: "Database is not configured. Cannot invoke function.",
     };
   }
   try {

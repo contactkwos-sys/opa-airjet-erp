@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { writeAuditLog } from "@/lib/audit";
-import { buildDemoLooms, buildDemoProductionEntries } from "@/lib/demoData";
 import { listRows, toUserError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { OpaLoom, OpaProductionEntry } from "@/types/database";
@@ -15,7 +14,6 @@ import {
   ErrorState,
   EmptyState,
   StatCard,
-  AlertBanner,
   type Column,
 } from "@/components/ui";
 
@@ -25,7 +23,6 @@ export default function ProductionEntriesPage() {
   const [looms, setLooms] = useState<OpaLoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [fromDemo, setFromDemo] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
@@ -48,32 +45,22 @@ export default function ProductionEntriesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const demoLooms = buildDemoLooms();
     const [loomRes, entryRes] = await Promise.all([
       listRows("opa_looms", {
         orderBy: { column: "loom_number", ascending: true },
         limit: 200,
-        demoRows: demoLooms as unknown as Array<{ id: string } & Record<string, unknown>>,
       }),
       listRows("opa_production_entries", {
         orderBy: { column: "entry_date", ascending: false },
         limit: 100,
-        demoRows: buildDemoProductionEntries(demoLooms) as unknown as Array<
-          { id: string } & Record<string, unknown>
-        >,
       }),
     ]);
 
-    const loadedLooms = (loomRes.data.length ? loomRes.data : demoLooms) as OpaLoom[];
+    const loadedLooms = loomRes.data as unknown as OpaLoom[];
     setLooms(loadedLooms);
-    setEntries(
-      (entryRes.data.length
-        ? entryRes.data
-        : buildDemoProductionEntries(loadedLooms)) as OpaProductionEntry[],
-    );
-    setFromDemo(loomRes.fromDemo || entryRes.fromDemo);
+    setEntries(entryRes.data as unknown as OpaProductionEntry[]);
     setForm((f) => ({ ...f, loom_id: loadedLooms[0]?.id ?? "" }));
-    const hardError = [loomRes, entryRes].find((r) => r.error && !r.fromDemo);
+    const hardError = [loomRes, entryRes].find((r) => r.error);
     setError(hardError?.error ?? null);
     setLoading(false);
   }, []);
@@ -134,25 +121,8 @@ export default function ProductionEntriesPage() {
       remarks: form.remarks || null,
     };
     const sb = getSupabase();
-    if (!sb || fromDemo) {
-      setEntries((prev) => [
-        {
-          id: crypto.randomUUID(),
-          ...payload,
-          shift_id: null,
-          article_id: null,
-          production_meter: closing - opening,
-          production_kg: null,
-          running_hours: null,
-          downtime_hours: null,
-          operator_id: null,
-          supervisor_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
-      setOpen(false);
+    if (!sb) {
+      setError("Database is not configured. Cannot save.");
       setSaving(false);
       return;
     }
@@ -192,12 +162,6 @@ export default function ProductionEntriesPage() {
         }
       />
 
-      {fromDemo ? (
-        <AlertBanner tone="info" title="Demo data">
-          Production tables are not connected yet. Showing preview entries.
-        </AlertBanner>
-      ) : null}
-
       <div className="fleet-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))" }}>
         <StatCard label="Entries" value={entries.length} />
         <StatCard label="Total meters" value={totals.meters.toLocaleString("en-IN")} tone="running" />
@@ -207,13 +171,14 @@ export default function ProductionEntriesPage() {
       <section className="panel table-panel">
         {loading ? <LoadingState /> : null}
         {!loading && error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
-        {!loading && entries.length === 0 ? (
+        {!loading && !error && entries.length === 0 ? (
           <EmptyState
-            title="No production entries"
+            title="No data available"
+            description="No production entries found."
             action={{ label: "New entry", onClick: () => setOpen(true) }}
           />
         ) : null}
-        {!loading && entries.length > 0 ? (
+        {!loading && !error && entries.length > 0 ? (
           <DataTable columns={columns} rows={entries} rowKey={(r) => r.id} pageSize={15} />
         ) : null}
       </section>

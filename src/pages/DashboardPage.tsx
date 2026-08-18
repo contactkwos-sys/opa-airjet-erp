@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
+import { useAuth } from "@/context/AuthContext";
+import { listRows } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 import { buildDemoLooms, demoKpis } from "@/lib/demoData";
-import type { LoomStatus, OpaAlert, OpaLoom } from "@/types/database";
+import type {
+  LoomStatus,
+  OpaAlert,
+  OpaLoom,
+  OpaProductionEntry,
+  OpaProductionTarget,
+} from "@/types/database";
 import {
   PageHeader,
   StatCard,
@@ -15,8 +23,14 @@ import {
 } from "@/components/ui";
 import { TrendChart, BarChartCard, PieChartCard } from "@/components/charts";
 
+type DashboardKpis = typeof demoKpis;
+
 function formatMeters(n: number) {
   return `${n.toLocaleString("en-IN")} M`;
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function LiveClock() {
@@ -52,18 +66,156 @@ function countByStatus(looms: OpaLoom[]) {
   return counts;
 }
 
+function emptyLiveKpis(fleetTotal: number): DashboardKpis {
+  return {
+    fleet: { total: fleetTotal, running: 0, stopped: 0, breakdown: 0 },
+    production: { target: 0, actual: 0, efficiency: 0, dobby: 0, plain: 0 },
+    operations: {
+      breakdownToday: 0,
+      maintenancePending: 0,
+      lowStockItems: 0,
+      purchasePending: 0,
+      securityAlerts: 0,
+    },
+    rejectionPct: 0,
+    downtimeHours: 0,
+    costPerMeter: 0,
+    inventoryValueLakh: 0,
+    purchasePendingValue: 0,
+    visitorsToday: 0,
+    ceoMeetingsPending: 0,
+    dispatchMeters: 0,
+    receivablesLakh: 0,
+  };
+}
+
+function buildLiveKpis(args: {
+  looms: OpaLoom[];
+  entries: OpaProductionEntry[];
+  targets: OpaProductionTarget[];
+  ops: {
+    maintenancePending: number;
+    lowStockItems: number;
+    purchasePending: number;
+    securityAlerts: number;
+    visitorsToday: number;
+    ceoMeetingsPending: number;
+    dispatchMeters: number;
+    receivablesLakh: number;
+    inventoryValueLakh: number;
+    purchasePendingValue: number;
+    rejectionPct: number;
+    costPerMeter: number;
+  };
+}): DashboardKpis {
+  const fleetCounts = countByStatus(args.looms);
+  const actual = args.entries.reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
+  const targetFromRows = args.targets.reduce((s, t) => s + Number(t.target_meter ?? 0), 0);
+  const target = targetFromRows > 0 ? targetFromRows : 0;
+  const effValues = args.entries
+    .map((e) => Number(e.efficiency))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const efficiency =
+    effValues.length > 0
+      ? Math.round((effValues.reduce((s, n) => s + n, 0) / effValues.length) * 10) / 10
+      : 0;
+  const downtimeHours =
+    Math.round(args.entries.reduce((s, e) => s + Number(e.downtime_hours ?? 0), 0) * 10) / 10;
+
+  const dobbyIds = new Set(args.looms.filter((l) => l.loom_type === "DOBBY").map((l) => l.id));
+  const plainIds = new Set(args.looms.filter((l) => l.loom_type === "PLAIN").map((l) => l.id));
+  const dobbyMeters = args.entries
+    .filter((e) => dobbyIds.has(e.loom_id))
+    .reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
+  const plainMeters = args.entries
+    .filter((e) => plainIds.has(e.loom_id))
+    .reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
+  const typeTotal = dobbyMeters + plainMeters;
+  const dobbyPct = typeTotal > 0 ? Math.round((dobbyMeters / typeTotal) * 1000) / 10 : 0;
+  const plainPct = typeTotal > 0 ? Math.round((plainMeters / typeTotal) * 1000) / 10 : 0;
+
+  return {
+    fleet: {
+      total: fleetCounts.total,
+      running: fleetCounts.running,
+      stopped: fleetCounts.stopped,
+      breakdown: fleetCounts.breakdown,
+    },
+    production: {
+      target: Math.round(target),
+      actual: Math.round(actual),
+      efficiency,
+      dobby: dobbyPct,
+      plain: plainPct,
+    },
+    operations: {
+      breakdownToday: fleetCounts.breakdown,
+      maintenancePending: args.ops.maintenancePending,
+      lowStockItems: args.ops.lowStockItems,
+      purchasePending: args.ops.purchasePending,
+      securityAlerts: args.ops.securityAlerts,
+    },
+    rejectionPct: args.ops.rejectionPct,
+    downtimeHours,
+    costPerMeter: args.ops.costPerMeter,
+    inventoryValueLakh: args.ops.inventoryValueLakh,
+    purchasePendingValue: args.ops.purchasePendingValue,
+    visitorsToday: args.ops.visitorsToday,
+    ceoMeetingsPending: args.ops.ceoMeetingsPending,
+    dispatchMeters: args.ops.dispatchMeters,
+    receivablesLakh: args.ops.receivablesLakh,
+  };
+}
+
+/** Count live rows; returns 0 on error / missing table (never demo). */
+async function countRows(
+  table: string,
+  filters?: Record<string, string | number | boolean | null>,
+): Promise<number> {
+  const result = await listRows(table, {
+    select: "id",
+    filters,
+    limit: 500,
+    demoFallback: false,
+  });
+  if (result.error) return 0;
+  return result.data.length;
+}
+
+async function sumColumn(
+  table: string,
+  column: string,
+  filters?: Record<string, string | number | boolean | null>,
+): Promise<number> {
+  const result = await listRows(table, {
+    select: column,
+    filters,
+    limit: 500,
+    demoFallback: false,
+  });
+  if (result.error) return 0;
+  return result.data.reduce((s, row) => s + Number(row[column] ?? 0), 0);
+}
+
 export default function DashboardPage() {
+  const { session, loading: authLoading } = useAuth();
   const [looms, setLooms] = useState<OpaLoom[]>([]);
   const [alerts, setAlerts] = useState<OpaAlert[]>([]);
+  const [kpis, setKpis] = useState<DashboardKpis>(() => emptyLiveKpis(0));
   const [loading, setLoading] = useState(true);
   const [usingDemo, setUsingDemo] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
+
     async function load() {
       setLoading(true);
       const sb = getSupabase();
-      if (!sb) {
+
+      // Seeded demo only when there is no authenticated Supabase session
+      if (!sb || !session) {
         if (!cancelled) {
           setLooms(buildDemoLooms());
           setAlerts([
@@ -96,54 +248,163 @@ export default function DashboardPage() {
               updated_at: new Date().toISOString(),
             },
           ]);
+          setKpis(demoKpis);
           setUsingDemo(true);
           setLoading(false);
         }
         return;
       }
+
+      const today = todayIso();
+
       try {
-        const [loomRes, alertRes] = await Promise.all([
-          sb.from("opa_looms").select("*").eq("is_active", true).order("loom_number"),
-          sb
-            .from("opa_alerts")
-            .select("*")
-            .eq("is_resolved", false)
-            .order("created_at", { ascending: false })
-            .limit(8),
+        const [loomRes, alertRes, entryRes, targetRes] = await Promise.all([
+          listRows("opa_looms", {
+            select: "*",
+            orderBy: { column: "loom_number", ascending: true },
+            filters: { is_active: true },
+            limit: 200,
+            demoFallback: false,
+          }),
+          listRows("opa_alerts", {
+            select: "*",
+            orderBy: { column: "created_at", ascending: false },
+            filters: { is_resolved: false },
+            limit: 8,
+            demoFallback: false,
+          }),
+          listRows("opa_production_entries", {
+            select: "*",
+            orderBy: { column: "entry_date", ascending: false },
+            filters: { entry_date: today },
+            limit: 500,
+            demoFallback: false,
+          }),
+          listRows("opa_production_targets", {
+            select: "*",
+            filters: { target_date: today },
+            limit: 200,
+            demoFallback: false,
+          }),
         ]);
+
         if (cancelled) return;
-        if (loomRes.error || !loomRes.data?.length) {
-          setLooms(buildDemoLooms());
-          setUsingDemo(true);
-        } else {
-          setLooms(loomRes.data as OpaLoom[]);
+
+        const liveLooms = loomRes.data as unknown as OpaLoom[];
+        const liveAlerts = alertRes.data as unknown as OpaAlert[];
+        const liveEntries = entryRes.data as unknown as OpaProductionEntry[];
+        const liveTargets = targetRes.data as unknown as OpaProductionTarget[];
+
+        setLooms(liveLooms);
+        setAlerts(liveAlerts);
+        setUsingDemo(false);
+
+        const [
+          maintenancePending,
+          purchasePending,
+          ceoMeetingsPending,
+          visitorsToday,
+          inventoryRows,
+          purchaseValue,
+          dispatchQty,
+          receivableTotal,
+          rejectInspections,
+          passInspections,
+        ] = await Promise.all([
+          countRows("opa_maintenance_requests", { status: "OPEN" }),
+          countRows("opa_purchase_orders", { payment_status: "PENDING" }),
+          countRows("ceo_visit_requests", { status: "PENDING" }),
+          countRows("visitor_entries"),
+          listRows("opa_inventory_items", {
+            select: "current_qty,reorder_level,unit_cost",
+            filters: { is_active: true },
+            limit: 500,
+            demoFallback: false,
+          }),
+          sumColumn("opa_purchase_orders", "total_amount", { payment_status: "PENDING" }),
+          sumColumn("opa_dispatch_items", "quantity"),
+          sumColumn("opa_sales_orders", "total_amount", { payment_status: "PENDING" }),
+          countRows("opa_quality_inspections", { result: "FAIL" }),
+          countRows("opa_quality_inspections", { result: "PASS" }),
+        ]);
+
+        if (cancelled) return;
+
+        let lowStockItems = 0;
+        let inventoryValueLakh = 0;
+        if (!inventoryRows.error) {
+          for (const row of inventoryRows.data) {
+            const qty = Number(row.current_qty ?? 0);
+            const reorder = Number(row.reorder_level ?? 0);
+            const cost = Number(row.unit_cost ?? 0);
+            if (reorder > 0 && qty <= reorder) lowStockItems += 1;
+            inventoryValueLakh += (qty * cost) / 100_000;
+          }
+          inventoryValueLakh = Math.round(inventoryValueLakh * 10) / 10;
         }
-        if (alertRes.data?.length) {
-          setAlerts(alertRes.data as OpaAlert[]);
-        }
+
+        const qcTotal = rejectInspections + passInspections;
+        const rejectionPct =
+          qcTotal > 0 ? Math.round((rejectInspections / qcTotal) * 1000) / 10 : 0;
+        const actualMeters = liveEntries.reduce(
+          (s, e) => s + Number(e.production_meter ?? 0),
+          0,
+        );
+        const costPerMeter =
+          actualMeters > 0 && inventoryValueLakh > 0
+            ? Math.round(((inventoryValueLakh * 100_000) / actualMeters) * 10) / 10
+            : 0;
+
+        setKpis(
+          buildLiveKpis({
+            looms: liveLooms,
+            entries: liveEntries,
+            targets: liveTargets,
+            ops: {
+              maintenancePending,
+              lowStockItems,
+              purchasePending,
+              securityAlerts: liveAlerts.length,
+              visitorsToday,
+              ceoMeetingsPending,
+              dispatchMeters: Math.round(dispatchQty),
+              receivablesLakh: Math.round((receivableTotal / 100_000) * 10) / 10,
+              inventoryValueLakh,
+              purchasePendingValue: Math.round((purchaseValue / 100_000) * 10) / 10,
+              rejectionPct,
+              costPerMeter,
+            },
+          }),
+        );
       } catch {
         if (!cancelled) {
-          setLooms(buildDemoLooms());
-          setUsingDemo(true);
+          setLooms([]);
+          setAlerts([]);
+          setKpis(emptyLiveKpis(0));
+          setUsingDemo(false);
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
     void load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, session]);
 
   const fleetCounts = useMemo(() => countByStatus(looms), [looms]);
-  const k = demoKpis;
-  const fillPct = Math.min(100, (k.production.actual / k.production.target) * 100);
+  const k = kpis;
+  const fillPct =
+    k.production.target > 0
+      ? Math.min(100, (k.production.actual / k.production.target) * 100)
+      : 0;
   const trend = useMemo(
     () =>
       ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name, i) => ({
         name,
-        value: Math.round(k.production.actual * (0.82 + i * 0.025)),
+        value: Math.round((k.production.actual || 0) * (0.82 + i * 0.025)),
       })),
     [k.production.actual],
   );
@@ -171,7 +432,7 @@ export default function DashboardPage() {
     ];
   }, [looms]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <>
         <PageHeader title="Operations Dashboard" subtitle="Loading plant KPIs…" />
@@ -189,11 +450,9 @@ export default function DashboardPage() {
       />
 
       {usingDemo ? (
-        <AlertBanner
-          tone="info"
-          title="Demo Mode KPIs"
-          children="Showing seeded demo figures until Supabase returns live loom data."
-        />
+        <AlertBanner tone="info" title="Demo Mode KPIs">
+          Showing seeded demo figures until you sign in to Supabase for live loom data.
+        </AlertBanner>
       ) : null}
 
       <div className="section-head">
@@ -215,7 +474,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="kpi-row dash-kpi-extra">
-        <StatCard label="Production today" value={formatMeters(k.production.actual)} hint={`Target ${formatMeters(k.production.target)}`} />
+        <StatCard
+          label="Production today"
+          value={formatMeters(k.production.actual)}
+          hint={`Target ${formatMeters(k.production.target)}`}
+        />
         <StatCard label="Efficiency" value={`${k.production.efficiency}%`} tone="running" />
         <StatCard label="Rejection" value={`${k.rejectionPct}%`} tone="amber" />
         <StatCard label="Downtime" value={`${k.downtimeHours} h`} tone="stopped" />
@@ -359,19 +622,27 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {looms.slice(0, 12).map((loom) => (
-                <tr key={loom.id}>
-                  <td>
-                    <Link to={`/looms/${loom.id}`}>{loom.loom_number}</Link>
+              {looms.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <p className="table-empty">No active looms returned from Supabase.</p>
                   </td>
-                  <td>{loom.location ?? "—"}</td>
-                  <td>{loom.loom_type}</td>
-                  <td>
-                    <StatusBadge status={loom.status as LoomStatus} />
-                  </td>
-                  <td>{loom.current_article ?? "—"}</td>
                 </tr>
-              ))}
+              ) : (
+                looms.slice(0, 12).map((loom) => (
+                  <tr key={loom.id}>
+                    <td>
+                      <Link to={`/looms/${loom.id}`}>{loom.loom_number}</Link>
+                    </td>
+                    <td>{loom.location ?? "—"}</td>
+                    <td>{loom.loom_type}</td>
+                    <td>
+                      <StatusBadge status={loom.status as LoomStatus} />
+                    </td>
+                    <td>{loom.current_article ?? "—"}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -450,15 +450,33 @@ export default function DashboardPage() {
         </span>
       </div>
       <div className="fleet-grid">
-        <StatCard label="Total Looms" value={fleetCounts.total || k.fleet.total} hint="Installed capacity" />
+        <StatCard
+          label="Total Looms"
+          value={fleetCounts.total || k.fleet.total}
+          hint="Installed capacity"
+          to="/looms"
+        />
         <StatCard
           label="Running"
           value={fleetCounts.running}
           tone="running"
           hint={`${(((fleetCounts.running || 0) / (fleetCounts.total || 1)) * 100).toFixed(1)}% of fleet`}
+          to="/factory-floor"
         />
-        <StatCard label="Stopped" value={fleetCounts.stopped} tone="stopped" hint="Idle / changeover" />
-        <StatCard label="Breakdown" value={fleetCounts.breakdown} tone="breakdown" hint="Needs attention" />
+        <StatCard
+          label="Stopped"
+          value={fleetCounts.stopped}
+          tone="stopped"
+          hint="Idle / changeover"
+          to="/looms"
+        />
+        <StatCard
+          label="Breakdown"
+          value={fleetCounts.breakdown}
+          tone="breakdown"
+          hint="Needs attention"
+          to="/maintenance/requests"
+        />
       </div>
 
       <div className="kpi-row dash-kpi-extra">
@@ -466,25 +484,45 @@ export default function DashboardPage() {
           label="Production today"
           value={formatMeters(k.production.actual)}
           hint={`Target ${formatMeters(k.production.target)}`}
+          to="/production"
         />
-        <StatCard label="Efficiency" value={`${k.production.efficiency}%`} tone="running" />
-        <StatCard label="Rejection" value={`${k.rejectionPct}%`} tone="amber" />
-        <StatCard label="Downtime" value={`${k.downtimeHours} h`} tone="stopped" />
-        <StatCard label="Cost / meter" value={`₹${k.costPerMeter}`} />
-        <StatCard label="Inventory" value={`₹${k.inventoryValueLakh}L`} />
-        <StatCard label="Purchase pending" value={`₹${k.purchasePendingValue}L`} tone="amber" />
-        <StatCard label="Visitors today" value={k.visitorsToday} tone="sky" />
-        <StatCard label="CEO meetings" value={k.ceoMeetingsPending} />
-        <StatCard label="Dispatch" value={formatMeters(k.dispatchMeters)} />
-        <StatCard label="Receivables" value={`₹${k.receivablesLakh}L`} />
-        <div className="panel stat achievement-stat">
+        <StatCard
+          label="Efficiency"
+          value={`${k.production.efficiency}%`}
+          tone="running"
+          to="/production"
+        />
+        <StatCard label="Rejection" value={`${k.rejectionPct}%`} tone="amber" to="/quality" />
+        <StatCard label="Downtime" value={`${k.downtimeHours} h`} tone="stopped" to="/stoppages" />
+        <StatCard label="Cost / meter" value={`₹${k.costPerMeter}`} to="/costing" />
+        <StatCard label="Inventory" value={`₹${k.inventoryValueLakh}L`} to="/inventory" />
+        <StatCard
+          label="Purchase pending"
+          value={`₹${k.purchasePendingValue}L`}
+          tone="amber"
+          to="/purchase-orders"
+        />
+        <StatCard
+          label="Visitors today"
+          value={k.visitorsToday}
+          tone="sky"
+          to="/security/visitors"
+        />
+        <StatCard label="CEO meetings" value={k.ceoMeetingsPending} to="/security/ceo-visits" />
+        <StatCard label="Dispatch" value={formatMeters(k.dispatchMeters)} to="/dispatch" />
+        <StatCard label="Receivables" value={`₹${k.receivablesLakh}L`} to="/receivables" />
+        <Link
+          to="/targets"
+          className="panel stat achievement-stat stat-clickable"
+          aria-label="Target attainment — open Targets"
+        >
           <span className="label">Target attainment</span>
           <AchievementIndicator
             level={efficiencyLevel(fillPct)}
             label={`${fillPct.toFixed(1)}% of daily target`}
             value={`${k.production.efficiency}% eff`}
           />
-        </div>
+        </Link>
       </div>
 
       <div className="production-layout">

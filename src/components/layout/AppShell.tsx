@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import type { ModuleKey } from "@/lib/permissions";
+import { AppFooter } from "@/components/layout/AppFooter";
 
 export type NavItem = { to: string; label: string; module: ModuleKey };
 export type NavGroup = { id: string; label: string; items: NavItem[] };
@@ -117,17 +118,40 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 export function AppShell() {
-  const { profile, signOut, can } = useAuth();
+  const { profile, signOut, can, role } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const visibleGroups = useMemo(() => {
-    return NAV_GROUPS.map((group) => ({
+    const groups = NAV_GROUPS.map((group) => ({
       ...group,
       items: group.items.filter((item) => can(item.module, "view")),
     })).filter((group) => group.items.length > 0);
-  }, [can]);
+
+    // Super Admin–only tools (reachable after /super-login; not on public login).
+    if (role === "SUPER_ADMIN") {
+      return groups.map((group) => {
+        if (group.id !== "system") return group;
+        const hasOverview = group.items.some(
+          (i) => i.to === "/admin/employee-overview",
+        );
+        if (hasOverview) return group;
+        return {
+          ...group,
+          items: [
+            ...group.items,
+            {
+              to: "/admin/employee-overview",
+              label: "Employee & Roles",
+              module: "settings" as ModuleKey,
+            },
+          ],
+        };
+      });
+    }
+    return groups;
+  }, [can, role]);
 
   return (
     <div className={`app-shell${open ? " nav-open" : ""}`}>
@@ -213,19 +237,7 @@ export function AppShell() {
         <div className="main-content">
           <Outlet />
         </div>
-        <footer className="app-footer">
-          <p className="app-footer-brand">Built by Kumaresh Budhia | Powered by KWOS</p>
-          <p className="app-footer-support">
-            Support:{" "}
-            <a
-              href="https://wa.me/919825063208"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              WhatsApp +91 98250 63208
-            </a>
-          </p>
-        </footer>
+        <AppFooter />
       </main>
     </div>
   );

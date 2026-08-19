@@ -14,10 +14,11 @@ Without Supabase credentials the app shows a configuration warning on the login 
 
 ## Login
 
-- **Primary:** 4-digit role PIN (Plant Manager, Security, etc.) validated by the `pin-login` Edge Function against `opa_role_pins` hashes — never checked in the frontend.
-- **Fallback:** email/password Super Admin recovery on the same login screen.
+- **Employee login (`/login`):** pick Role (Plant Manager, Production Manager, or Security) → pick Name → enter personal 4-digit PIN. Validated by the `pin-login` Edge Function against bcrypt hashes — never checked in the frontend.
+- **Super Admin (hidden):** `/super-login` (alias `/admin`) — not linked from the public UI. PIN entry (email recovery available on that page only).
+- **Admin tools:** Settings → Role PIN Management (emergency reset, PIN change history, locked accounts) and `/admin/employee-overview` after Super Admin sign-in.
 
-Apply migration `202608181200_opa_role_pins.sql` and deploy `supabase/functions/pin-login` before using PIN unlock in production.
+Apply migrations `202608181200_opa_role_pins.sql`, `202608181210_opa_role_pins_fix.sql`, and `202608190100_opa_pin_employees_audit.sql`, then deploy `supabase/functions/pin-login`.
 
 ## Environment
 

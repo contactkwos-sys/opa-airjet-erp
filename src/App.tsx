@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { LoadingState } from "@/components/ui";
 
 import LoginPage from "@/pages/LoginPage";
+import SuperAdminLoginPage from "@/pages/SuperAdminLoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoomsPage from "@/pages/LoomsPage";
 import LoomDetailPage from "@/pages/LoomDetailPage";
@@ -44,6 +45,7 @@ import ApprovalsPage from "@/pages/system/ApprovalsPage";
 import DocumentsPage from "@/pages/system/DocumentsPage";
 import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
+import EmployeeRoleOverviewPage from "@/pages/system/EmployeeRoleOverviewPage";
 import AuditPage from "@/pages/system/AuditPage";
 
 /* Existing Security module — do not remove */
@@ -112,6 +114,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/super-login" element={<SuperAdminLoginPage />} />
+      <Route path="/admin" element={<SuperAdminLoginPage />} />
       <Route path="/security/login" element={<SecurityLoginPage />} />
       <Route path="/ceo/visit/:token" element={<CeoVisitMobilePage />} />
       <Route path="/ceo/approve/:token" element={<CeoApprovalPage />} />
@@ -183,6 +187,7 @@ export default function App() {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="admin/employee-overview" element={<EmployeeRoleOverviewPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

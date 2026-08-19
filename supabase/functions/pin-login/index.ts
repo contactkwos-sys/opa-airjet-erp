@@ -1,5 +1,5 @@
 // Supabase Edge Function: pin-login
-// Validates a 4-digit role PIN server-side and returns a short-lived session.
+// Validates a 4-digit role or employee PIN server-side and returns a short-lived session.
 // PINs / hashes never leave the database except via bcrypt compare.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -13,6 +13,7 @@ const corsHeaders: Record<string, string> = {
 type PinBody = {
   role?: string;
   pin?: string;
+  employee_id?: string;
 };
 
 function json(status: number, body: Record<string, unknown>): Response {
@@ -51,49 +52,98 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as PinBody;
     const role = String(body.role ?? "").trim().toUpperCase();
     const pin = String(body.pin ?? "").trim();
+    const employeeId = body.employee_id ? String(body.employee_id).trim() : "";
 
     if (!role || !/^\d{4}$/.test(pin)) {
       return json(400, { error: "Enter a valid role and 4-digit PIN." });
     }
 
-    const { data: verified, error: verifyError } = await admin.rpc(
-      "opa_verify_role_pin",
-      { p_role: role, p_pin: pin },
-    );
+    // Employee login (named user under a role) vs role-level (Super Admin).
+    let authEmail = "";
+    let fullName = "";
+    let resolvedRole = role;
+    let resolvedEmployeeId: string | null = null;
 
-    if (verifyError) {
-      console.error("[pin-login] verify failed", verifyError.message);
-      return json(500, { error: "PIN verification unavailable." });
+    if (employeeId) {
+      const { data: verified, error: verifyError } = await admin.rpc(
+        "opa_verify_employee_pin",
+        { p_employee_id: employeeId, p_pin: pin },
+      );
+      if (verifyError) {
+        console.error("[pin-login] employee verify failed", verifyError.message);
+        return json(500, { error: "PIN verification unavailable." });
+      }
+      const row = Array.isArray(verified) ? verified[0] : verified;
+      if (row?.locked) {
+        return json(423, {
+          error: "Account locked after too many wrong PIN attempts. Contact Super Admin.",
+        });
+      }
+      if (!row?.ok || !row.auth_email) {
+        await admin.from("opa_audit_logs").insert({
+          action: "PIN_LOGIN_FAILED",
+          module: "auth",
+          new_value: { role, employee_id: employeeId },
+        });
+        return json(401, { error: "Invalid PIN." });
+      }
+      authEmail = String(row.auth_email);
+      fullName = String(row.full_name ?? role);
+      resolvedRole = String(row.role ?? role).toUpperCase();
+      resolvedEmployeeId = String(row.employee_id ?? employeeId);
+    } else {
+      const { data: verified, error: verifyError } = await admin.rpc(
+        "opa_verify_role_pin",
+        { p_role: role, p_pin: pin },
+      );
+
+      if (verifyError) {
+        console.error("[pin-login] verify failed", verifyError.message);
+        return json(500, { error: "PIN verification unavailable." });
+      }
+
+      const row = Array.isArray(verified) ? verified[0] : verified;
+      if (row?.locked) {
+        return json(423, {
+          error: "Account locked after too many wrong PIN attempts. Contact Super Admin.",
+        });
+      }
+      if (!row?.ok || !row.auth_email) {
+        await admin.from("opa_audit_logs").insert({
+          action: "PIN_LOGIN_FAILED",
+          module: "auth",
+          new_value: { role },
+        });
+        return json(401, { error: "Invalid PIN." });
+      }
+      authEmail = String(row.auth_email);
+      fullName = String(row.full_name ?? role);
+      resolvedRole = String(row.role ?? role).toUpperCase();
     }
 
-    const row = Array.isArray(verified) ? verified[0] : verified;
-    if (!row?.ok || !row.auth_email) {
-      await admin.from("opa_audit_logs").insert({
-        action: "PIN_LOGIN_FAILED",
-        module: "auth",
-        new_value: { role },
-      });
-      return json(401, { error: "Invalid PIN." });
-    }
-
-    const email = String(row.auth_email);
-    const fullName = String(row.full_name ?? role);
+    const email = authEmail;
     const password = Deno.env.get("OPA_PIN_BOOTSTRAP_SECRET") ??
-      `opa-pin-${roleSlug(role)}-${requiredEnv("SUPABASE_SERVICE_ROLE_KEY").slice(0, 24)}`;
+      `opa-pin-${roleSlug(resolvedRole)}-${
+        resolvedEmployeeId ?? requiredEnv("SUPABASE_SERVICE_ROLE_KEY").slice(0, 24)
+      }`;
 
-    // Ensure auth user exists for this role account.
+    // Ensure auth user exists for this role/employee account.
     let userId: string | null = null;
     const created = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { role, full_name: fullName, login_method: "pin" },
+      user_metadata: {
+        role: resolvedRole,
+        full_name: fullName,
+        login_method: "pin",
+        employee_id: resolvedEmployeeId,
+      },
     });
 
     if (created.data.user) {
       userId = created.data.user.id;
     } else {
-      // User already exists — rotate password and resolve id via magic link metadata.
       const linked = await admin.auth.admin.generateLink({
         type: "magiclink",
         email,
@@ -110,19 +160,25 @@ Deno.serve(async (req) => {
       await admin.auth.admin.updateUserById(userId, {
         password,
         email_confirm: true,
-        user_metadata: { role, full_name: fullName, login_method: "pin" },
+        user_metadata: {
+          role: resolvedRole,
+          full_name: fullName,
+          login_method: "pin",
+          employee_id: resolvedEmployeeId,
+        },
       });
     }
 
-    // Ensure opa_profiles row matches the role.
     const { error: upsertError } = await admin.from("opa_profiles").upsert(
       {
         id: userId,
         email,
         full_name: fullName,
-        role,
+        role: resolvedRole,
         is_active: true,
-        employee_id: `PIN-${role}`,
+        employee_id: resolvedEmployeeId
+          ? `PIN-EMP-${resolvedEmployeeId.slice(0, 8)}`
+          : `PIN-${resolvedRole}`,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },
@@ -147,7 +203,11 @@ Deno.serve(async (req) => {
       user_name: fullName,
       action: "PIN_LOGIN",
       module: "auth",
-      new_value: { role, method: "pin" },
+      new_value: {
+        role: resolvedRole,
+        method: "pin",
+        employee_id: resolvedEmployeeId,
+      },
     });
 
     return json(200, {
@@ -161,8 +221,9 @@ Deno.serve(async (req) => {
       user: {
         id: userId,
         email,
-        role,
+        role: resolvedRole,
         full_name: fullName,
+        employee_id: resolvedEmployeeId,
       },
     });
   } catch (err) {

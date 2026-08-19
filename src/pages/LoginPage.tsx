@@ -42,6 +42,12 @@ export default function LoginPage() {
 
   const loadEmployees = useCallback(async (selectedRole: OpaRole) => {
     setDirectoryError(null);
+    if (!isLoginRole(selectedRole)) {
+      setEmployees([]);
+      setEmployeeId("");
+      setDirectoryError("Select a valid role to continue.");
+      return;
+    }
     const sb = getSupabase();
     if (!sb) {
       setEmployees([]);
@@ -53,7 +59,13 @@ export default function LoginPage() {
       .eq("role", selectedRole)
       .order("display_name", { ascending: true });
     if (qError) {
-      setDirectoryError(qError.message);
+      // Never surface raw Postgres enum noise (e.g. empty role=eq.).
+      const raw = qError.message ?? "";
+      setDirectoryError(
+        raw.includes("invalid input value for enum")
+          ? "Could not load logins for this role. Try again or pick another role."
+          : raw,
+      );
       setEmployees([]);
       setEmployeeId("");
       return;
@@ -105,7 +117,8 @@ export default function LoginPage() {
       loading ||
       pin.length !== 4 ||
       inFlight.current ||
-      !employeeId
+      !employeeId ||
+      !isLoginRole(role)
     ) {
       return;
     }
@@ -117,6 +130,7 @@ export default function LoginPage() {
       const result = await signInWithPin(role, pin, employeeId);
       if (cancelled) {
         inFlight.current = false;
+        setSubmitting(false);
         return;
       }
       setSubmitting(false);
@@ -179,10 +193,13 @@ export default function LoginPage() {
             value={role}
             disabled={!isSupabaseConfigured() || submitting}
             onChange={(e) => {
+              const next = e.target.value.trim().toUpperCase();
+              if (!isLoginRole(next)) return;
               deepLinkApplied.current = true;
-              setRole(e.target.value as OpaRole);
+              setRole(next);
               setPin("");
               setError(null);
+              setDirectoryError(null);
             }}
           >
             {EMPLOYEE_PIN_LOGIN_ROLES.map((r) => (

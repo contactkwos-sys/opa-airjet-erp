@@ -1,10 +1,30 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Session } from "@supabase/supabase-js";
+import { FunctionsHttpError, type Session } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { isSupabaseConfigured } from "@/lib/env";
 import { hasPermission, type ModuleKey, type PermissionAction } from "@/lib/permissions";
 import type { OpaProfile, OpaRole } from "@/types/database";
 import { writeAuditLog } from "@/lib/audit";
+
+/** Prefer the Edge Function JSON `{ error }` body over the generic non-2xx message. */
+async function edgeFunctionErrorMessage(
+  error: unknown,
+  fallback: string,
+): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = (await error.context.json()) as { error?: string } | null;
+      if (body?.error && typeof body.error === "string") return body.error;
+    } catch {
+      /* body already consumed or not JSON */
+    }
+  }
+  if (error && typeof error === "object" && "message" in error) {
+    const msg = String((error as { message?: string }).message ?? "");
+    if (msg && !msg.toLowerCase().includes("non-2xx")) return msg;
+  }
+  return fallback;
+}
 
 type AuthContextValue = {
   session: Session | null;
@@ -159,19 +179,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    if (error) {
-      const msg = error.message?.toLowerCase() ?? "";
-      if (msg.includes("failed to send") || msg.includes("fetch")) {
-        return { error: "PIN login service is unavailable. Try again later." };
-      }
-      return { error: error.message || "PIN login failed." };
-    }
-
     const payload = data as {
       error?: string;
       session?: { access_token: string; refresh_token: string };
       user?: { id: string; email: string; full_name?: string; role?: string };
     } | null;
+
+    if (error) {
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("failed to send") || msg.includes("fetch")) {
+        return { error: "PIN login service is unavailable. Try again later." };
+      }
+      // Non-2xx (wrong PIN / locked) — surface server message, not generic FunctionsHttpError.
+      if (payload?.error) return { error: payload.error };
+      return {
+        error: await edgeFunctionErrorMessage(error, "PIN login failed."),
+      };
+    }
 
     if (!payload || payload.error || !payload.session?.access_token || !payload.session.refresh_token) {
       return { error: payload?.error ?? "Invalid PIN." };

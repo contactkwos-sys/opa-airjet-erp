@@ -5,9 +5,11 @@ import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import {
   EMPLOYEE_PIN_LOGIN_ROLES,
+  COMPANY_PIN_MANAGED_ROLES,
   PIN_MANAGED_ROLES,
   ROLE_PIN_LABELS,
 } from "@/lib/rolePins";
+import { isDeveloperOverride, isPinAdmin } from "@/lib/adminTiers";
 import type { OpaRole } from "@/types/database";
 import {
   PageHeader,
@@ -37,12 +39,19 @@ type SessionAdded = {
 };
 
 /**
- * Super Admin only — Employee & Role Overview.
+ * Company Admin + Developer Override — Employee & Role Overview.
  * Route: /admin/employee-overview (not linked from public UI).
  */
 export default function EmployeeRoleOverviewPage() {
   const { role, loading: authLoading } = useAuth();
-  const isSuperAdmin = role === "SUPER_ADMIN";
+  const pinAdmin = isPinAdmin(role);
+  const developer = isDeveloperOverride(role);
+  const creatableRoles = useMemo(() => {
+    const roles = developer
+      ? [...EMPLOYEE_PIN_LOGIN_ROLES, ...PIN_MANAGED_ROLES]
+      : [...EMPLOYEE_PIN_LOGIN_ROLES, ...COMPANY_PIN_MANAGED_ROLES];
+    return [...new Set(roles)];
+  }, [developer]);
   const [employees, setEmployees] = useState<PinEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +69,7 @@ export default function EmployeeRoleOverviewPage() {
   const [manualPin, setManualPin] = useState("");
 
   const load = useCallback(async () => {
-    if (!isSuperAdmin) return;
+    if (!pinAdmin) return;
     setLoading(true);
     setError(null);
     const sb = getSupabase();
@@ -77,7 +86,7 @@ export default function EmployeeRoleOverviewPage() {
       setEmployees((data ?? []) as PinEmployee[]);
     }
     setLoading(false);
-  }, [isSuperAdmin]);
+  }, [pinAdmin]);
 
   useEffect(() => {
     void load();
@@ -91,7 +100,7 @@ export default function EmployeeRoleOverviewPage() {
 
   const byRole = useMemo(() => {
     const map = new Map<OpaRole, PinEmployee[]>();
-    for (const r of [...EMPLOYEE_PIN_LOGIN_ROLES, ...PIN_MANAGED_ROLES]) {
+    for (const r of creatableRoles) {
       if (!map.has(r)) map.set(r, []);
     }
     for (const emp of employees) {
@@ -102,7 +111,7 @@ export default function EmployeeRoleOverviewPage() {
     return [...map.entries()].filter(
       ([r, list]) => EMPLOYEE_PIN_LOGIN_ROLES.includes(r) || list.length > 0,
     );
-  }, [employees]);
+  }, [employees, creatableRoles]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -192,7 +201,7 @@ export default function EmployeeRoleOverviewPage() {
   }
 
   if (authLoading) return <LoadingState label="Loading…" />;
-  if (!isSuperAdmin) return <Navigate to="/" replace />;
+  if (!pinAdmin) return <Navigate to="/" replace />;
 
   return (
     <>
@@ -217,7 +226,7 @@ export default function EmployeeRoleOverviewPage() {
             value={newRole}
             onChange={(e) => setNewRole(e.target.value as OpaRole)}
           >
-            {EMPLOYEE_PIN_LOGIN_ROLES.map((r) => (
+            {creatableRoles.map((r) => (
               <option key={r} value={r}>
                 {ROLE_PIN_LABELS[r]}
               </option>

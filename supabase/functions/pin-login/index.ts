@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       const row = Array.isArray(verified) ? verified[0] : verified;
       if (row?.locked) {
         return json(423, {
-          error: "Account locked after too many wrong PIN attempts. Contact Super Admin.",
+          error: "Account locked after too many wrong PIN attempts. Contact Company Admin.",
         });
       }
       if (!row?.ok || !row.auth_email) {
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
       const row = Array.isArray(verified) ? verified[0] : verified;
       if (row?.locked) {
         return json(423, {
-          error: "Account locked after too many wrong PIN attempts. Contact Super Admin.",
+          error: "Account locked after too many wrong PIN attempts. Contact Company Admin.",
         });
       }
       if (!row?.ok || !row.auth_email) {

@@ -6,6 +6,7 @@ import { LoadingState } from "@/components/ui";
 
 import LoginPage from "@/pages/LoginPage";
 import SuperAdminLoginPage from "@/pages/SuperAdminLoginPage";
+import DeveloperOverrideLoginPage from "@/pages/DeveloperOverrideLoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoomsPage from "@/pages/LoomsPage";
 import LoomDetailPage from "@/pages/LoomDetailPage";
@@ -116,6 +117,8 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/super-login" element={<SuperAdminLoginPage />} />
       <Route path="/admin" element={<SuperAdminLoginPage />} />
+      <Route path="/kwos-override" element={<DeveloperOverrideLoginPage />} />
+      <Route path="/dev-console" element={<DeveloperOverrideLoginPage />} />
       <Route path="/security/login" element={<SecurityLoginPage />} />
       <Route path="/ceo/visit/:token" element={<CeoVisitMobilePage />} />
       <Route path="/ceo/approve/:token" element={<CeoApprovalPage />} />

@@ -160,6 +160,7 @@ export const DEFAULT_MODULE_ACCESS: Record<
   SECURITY_GUARD: {
     ...allModules(none),
     security: { ...viewOnly, create: true, edit: true },
+    settings: viewOnly,
   },
   QUALITY_MANAGER: {
     ...allModules(none),

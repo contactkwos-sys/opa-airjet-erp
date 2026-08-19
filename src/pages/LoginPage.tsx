@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getSupabase } from "@/lib/supabase";
@@ -14,17 +14,28 @@ type DirectoryEmployee = {
   display_name: string;
 };
 
+function isLoginRole(value: string | null): value is OpaRole {
+  return Boolean(value && (EMPLOYEE_PIN_LOGIN_ROLES as string[]).includes(value));
+}
+
 export default function LoginPage() {
   const { signInWithPin, session, loading } = useAuth();
   const navigate = useNavigate();
-  const [role, setRole] = useState<OpaRole>("FACTORY_MANAGER");
-  const [employeeId, setEmployeeId] = useState("");
+  const [searchParams] = useSearchParams();
+  const deepRole = searchParams.get("role");
+  const deepEmployeeId = searchParams.get("e")?.trim() ?? "";
+
+  const [role, setRole] = useState<OpaRole>(() =>
+    isLoginRole(deepRole) ? deepRole : "FACTORY_MANAGER",
+  );
+  const [employeeId, setEmployeeId] = useState(deepEmployeeId);
   const [employees, setEmployees] = useState<DirectoryEmployee[]>([]);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
+  const deepLinkApplied = useRef(false);
 
   const loadEmployees = useCallback(async (selectedRole: OpaRole) => {
     setDirectoryError(null);
@@ -46,8 +57,20 @@ export default function LoginPage() {
     }
     const rows = (data ?? []) as DirectoryEmployee[];
     setEmployees(rows);
-    setEmployeeId(rows[0]?.id ?? "");
-  }, []);
+
+    setEmployeeId((prev) => {
+      if (prev && rows.some((r) => r.id === prev)) return prev;
+      if (
+        !deepLinkApplied.current &&
+        deepEmployeeId &&
+        rows.some((r) => r.id === deepEmployeeId)
+      ) {
+        deepLinkApplied.current = true;
+        return deepEmployeeId;
+      }
+      return rows[0]?.id ?? "";
+    });
+  }, [deepEmployeeId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
@@ -58,6 +81,8 @@ export default function LoginPage() {
     () => employees.find((e) => e.id === employeeId) ?? null,
     [employees, employeeId],
   );
+
+  const hideNamePicker = employees.length <= 1;
 
   function pushDigit(d: string) {
     if (inFlight.current || !employeeId) return;
@@ -132,6 +157,14 @@ export default function LoginPage() {
           </AlertBanner>
         ) : null}
 
+        {deepEmployeeId && selectedEmployee ? (
+          <p className="muted pin-hint employee-link-banner">
+            Personal login link for <strong>{selectedEmployee.display_name}</strong>
+            {" · "}
+            {ROLE_PIN_LABELS[role]}
+          </p>
+        ) : null}
+
         <form
           className="form-grid pin-login"
           onSubmit={(e) => {
@@ -143,6 +176,7 @@ export default function LoginPage() {
             value={role}
             disabled={!isSupabaseConfigured() || submitting}
             onChange={(e) => {
+              deepLinkApplied.current = true;
               setRole(e.target.value as OpaRole);
               setPin("");
               setError(null);
@@ -155,32 +189,39 @@ export default function LoginPage() {
             ))}
           </TextSelect>
 
-          <TextSelect
-            label="Name"
-            value={employeeId}
-            disabled={!isSupabaseConfigured() || submitting || employees.length === 0}
-            onChange={(e) => {
-              setEmployeeId(e.target.value);
-              setPin("");
-              setError(null);
-            }}
-          >
-            {employees.length === 0 ? (
-              <option value="">No employees configured</option>
-            ) : (
-              employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.display_name}
-                </option>
-              ))
-            )}
-          </TextSelect>
+          {!hideNamePicker ? (
+            <TextSelect
+              label="Name"
+              value={employeeId}
+              disabled={!isSupabaseConfigured() || submitting || employees.length === 0}
+              onChange={(e) => {
+                deepLinkApplied.current = true;
+                setEmployeeId(e.target.value);
+                setPin("");
+                setError(null);
+              }}
+            >
+              {employees.length === 0 ? (
+                <option value="">No employees configured</option>
+              ) : (
+                employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.display_name}
+                  </option>
+                ))
+              )}
+            </TextSelect>
+          ) : selectedEmployee ? (
+            <p className="muted pin-hint">
+              Signing in as <strong>{selectedEmployee.display_name}</strong>
+            </p>
+          ) : null}
 
           {directoryError ? (
             <p className="form-error">{directoryError}</p>
           ) : employees.length === 0 && isSupabaseConfigured() ? (
             <p className="muted pin-hint">
-              No named logins for {ROLE_PIN_LABELS[role]} yet. Ask Super Admin to
+              No named logins for {ROLE_PIN_LABELS[role]} yet. Ask CEO or Director to
               add employees.
             </p>
           ) : null}

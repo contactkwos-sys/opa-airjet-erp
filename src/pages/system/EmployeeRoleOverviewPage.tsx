@@ -10,6 +10,13 @@ import {
   ROLE_PIN_LABELS,
 } from "@/lib/rolePins";
 import { isDeveloperOverride, isPinAdmin } from "@/lib/adminTiers";
+import {
+  buildEmployeeAccessMessage,
+  buildEmployeeLoginLink,
+  copyText,
+  shareOrCopy,
+  whatsappShareUrl,
+} from "@/lib/employeeLinks";
 import type { OpaRole } from "@/types/database";
 import {
   PageHeader,
@@ -38,20 +45,38 @@ type SessionAdded = {
   added_at: string;
 };
 
+const PROTECTED_CREATE_ROLES: OpaRole[] = [
+  "CEO",
+  "DIRECTOR",
+  "COMPANY_ADMIN",
+  "SUPER_ADMIN",
+];
+
 /**
- * Company Admin + Developer Override — Employee & Role Overview.
- * Route: /admin/employee-overview (not linked from public UI).
+ * CEO / Director / Developer Override — Employee & Role Overview + shareable links.
+ * Route: /admin/employee-overview
  */
 export default function EmployeeRoleOverviewPage() {
   const { role, loading: authLoading } = useAuth();
   const pinAdmin = isPinAdmin(role);
   const developer = isDeveloperOverride(role);
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+
   const creatableRoles = useMemo(() => {
-    const roles = developer
-      ? [...EMPLOYEE_PIN_LOGIN_ROLES, ...PIN_MANAGED_ROLES]
-      : [...EMPLOYEE_PIN_LOGIN_ROLES, ...COMPANY_PIN_MANAGED_ROLES];
-    return [...new Set(roles)];
+    if (developer) {
+      return [...new Set([...PIN_MANAGED_ROLES, ...EMPLOYEE_PIN_LOGIN_ROLES])];
+    }
+    return [
+      ...new Set([
+        ...EMPLOYEE_PIN_LOGIN_ROLES.filter(
+          (r) => !PROTECTED_CREATE_ROLES.includes(r),
+        ),
+        ...COMPANY_PIN_MANAGED_ROLES,
+      ]),
+    ];
   }, [developer]);
+
   const [employees, setEmployees] = useState<PinEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,9 +134,18 @@ export default function EmployeeRoleOverviewPage() {
       map.set(emp.role, list);
     }
     return [...map.entries()].filter(
-      ([r, list]) => EMPLOYEE_PIN_LOGIN_ROLES.includes(r) || list.length > 0,
+      ([r, list]) =>
+        (EMPLOYEE_PIN_LOGIN_ROLES.includes(r) &&
+          !PROTECTED_CREATE_ROLES.includes(r)) ||
+        list.length > 0,
     );
   }, [employees, creatableRoles]);
+
+  async function notifyLinkAction(result: "shared" | "copied" | "failed", label: string) {
+    if (result === "shared") setMessage(`${label} opened in the share sheet.`);
+    else if (result === "copied") setMessage(`${label} copied — paste into WhatsApp or SMS.`);
+    else setMessage(`Could not copy ${label}. Long-press / select the text instead.`);
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -153,9 +187,8 @@ export default function EmployeeRoleOverviewPage() {
       ...prev,
     ]);
     setMessage(
-      `Added ${name} (${ROLE_PIN_LABELS[newRole]}). Form is ready for the next employee — role kept.`,
+      `Added ${name} (${ROLE_PIN_LABELS[newRole]}). Copy their employee link + PIN below to send via WhatsApp/SMS.`,
     );
-    // Keep role; clear name + PIN for rapid successive adds (no re-navigation).
     setNewName("");
     setNewPin("");
     void load();
@@ -193,7 +226,7 @@ export default function EmployeeRoleOverviewPage() {
       ...prev.filter((s) => s.id !== emp.id),
     ]);
     setMessage(
-      `PIN updated for ${emp.display_name}. Copy it from the session list below — it will not be shown again after you leave.`,
+      `PIN updated for ${emp.display_name}. Copy link + PIN below — it will not be shown again after you leave.`,
     );
     setSetPinForId(null);
     setManualPin("");
@@ -207,7 +240,7 @@ export default function EmployeeRoleOverviewPage() {
     <>
       <PageHeader
         title="Employee & Role Overview"
-        subtitle="Add named PIN logins under each role. Stay on this page to add many in a row — role is kept after each add."
+        subtitle="Add named PIN logins, then copy each employee’s personal login link to send from your phone or desktop."
       />
 
       {message ? <AlertBanner tone="info" title={message} /> : null}
@@ -216,9 +249,8 @@ export default function EmployeeRoleOverviewPage() {
       <section className="panel page-card sticky-add-panel">
         <h3>Add employee</h3>
         <p className="muted">
-          Enter name + optional starting PIN, press Add &amp; next. Role stays selected so you can
-          add the whole team without leaving this screen. Copy each one-time PIN from the session
-          list — existing PINs are never shown again later.
+          Enter name + optional starting PIN, press Add &amp; next. After each add, copy the
+          employee link (or link + PIN) and send it yourself via WhatsApp or SMS.
         </p>
         <form className="form-grid bulk-add-form" onSubmit={(e) => void handleCreate(e)}>
           <TextSelect
@@ -263,10 +295,11 @@ export default function EmployeeRoleOverviewPage() {
       </section>
 
       {sessionAdded.length > 0 ? (
-        <section className="panel page-card">
-          <h3>This session — copy PINs now</h3>
+        <section className="panel page-card" id="employee-links-session">
+          <h3>Employee Links — copy &amp; send now</h3>
           <p className="muted">
-            Shown once for this browser session. After you leave or dismiss, these values are gone.
+            One-time PIN is shown for this browser session only. Use Copy link+PIN or WhatsApp
+            to send access from mobile or desktop.
           </p>
           <div className="table-wrap">
             <table>
@@ -274,31 +307,77 @@ export default function EmployeeRoleOverviewPage() {
                 <tr>
                   <th>Name</th>
                   <th>Role</th>
-                  <th>Starting PIN</th>
+                  <th>PIN</th>
+                  <th>Personal link</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {sessionAdded.map((row) => (
-                  <tr key={`${row.id}-${row.added_at}`}>
-                    <td>{row.display_name}</td>
-                    <td>{ROLE_PIN_LABELS[row.role]}</td>
-                    <td>
-                      <code className="one-time-pin-value session-pin">{row.temporary_pin}</code>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(row.temporary_pin);
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {sessionAdded.map((row) => {
+                  const link = buildEmployeeLoginLink({
+                    origin,
+                    role: row.role,
+                    employeeId: row.id,
+                  });
+                  const fullMsg = buildEmployeeAccessMessage({
+                    origin,
+                    role: row.role,
+                    employeeId: row.id,
+                    displayName: row.display_name,
+                    pin: row.temporary_pin,
+                  });
+                  return (
+                    <tr key={`${row.id}-${row.added_at}`}>
+                      <td>{row.display_name}</td>
+                      <td>{ROLE_PIN_LABELS[row.role]}</td>
+                      <td>
+                        <code className="one-time-pin-value session-pin">
+                          {row.temporary_pin}
+                        </code>
+                      </td>
+                      <td className="employee-link-cell">
+                        <code className="employee-link-url">{link}</code>
+                      </td>
+                      <td>
+                        <div className="employee-link-actions">
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => {
+                              void shareOrCopy(fullMsg).then((r) =>
+                                notifyLinkAction(r, `Link + PIN for ${row.display_name}`),
+                              );
+                            }}
+                          >
+                            Copy link+PIN
+                          </button>
+                          <a
+                            className="btn btn-ghost"
+                            href={whatsappShareUrl(fullMsg)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            WhatsApp
+                          </a>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => {
+                              void copyText(link).then((ok) =>
+                                notifyLinkAction(
+                                  ok ? "copied" : "failed",
+                                  `Link for ${row.display_name}`,
+                                ),
+                              );
+                            }}
+                          >
+                            Copy link
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -312,9 +391,89 @@ export default function EmployeeRoleOverviewPage() {
         </section>
       ) : null}
 
-      {loading ? (
-        <LoadingState label="Loading employees…" />
-      ) : (
+      <section className="panel page-card" id="employee-links">
+        <h3>Employee Links</h3>
+        <p className="muted">
+          Every employee has a unique login link that opens /login with their role and name
+          already selected. Copy the link anytime; include a fresh PIN after you set one.
+        </p>
+        {loading ? (
+          <LoadingState label="Loading employees…" />
+        ) : employees.length === 0 ? (
+          <p className="muted">No employees yet — add someone above.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Login link</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((emp) => {
+                  const link = buildEmployeeLoginLink({
+                    origin,
+                    role: emp.role,
+                    employeeId: emp.id,
+                  });
+                  const linkOnlyMsg = buildEmployeeAccessMessage({
+                    origin,
+                    role: emp.role,
+                    employeeId: emp.id,
+                    displayName: emp.display_name,
+                  });
+                  return (
+                    <tr key={emp.id}>
+                      <td>{emp.display_name}</td>
+                      <td>{ROLE_PIN_LABELS[emp.role]}</td>
+                      <td>
+                        {!emp.is_active
+                          ? "Inactive"
+                          : emp.locked_until &&
+                              new Date(emp.locked_until) > new Date()
+                            ? "Locked"
+                            : "Active"}
+                      </td>
+                      <td className="employee-link-cell">
+                        <code className="employee-link-url">{link}</code>
+                      </td>
+                      <td>
+                        <div className="employee-link-actions">
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => {
+                              void shareOrCopy(linkOnlyMsg).then((r) =>
+                                notifyLinkAction(r, `Link for ${emp.display_name}`),
+                              );
+                            }}
+                          >
+                            Copy / Share
+                          </button>
+                          <a
+                            className="btn btn-ghost"
+                            href={whatsappShareUrl(linkOnlyMsg)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            WhatsApp
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {loading ? null : (
         byRole.map(([r, list]) => (
           <section className="panel page-card" key={r}>
             <h3>

@@ -130,7 +130,7 @@ export function AppShell() {
       items: group.items.filter((item) => can(item.module, "view")),
     })).filter((group) => group.items.length > 0);
 
-    // Company Admin + Developer Override tools (hidden login routes).
+    // CEO / Director / Developer Override tools.
     if (isPinAdmin(role)) {
       return groups.map((group) => {
         if (group.id !== "system") return group;
@@ -144,7 +144,7 @@ export function AppShell() {
             ...group.items,
             {
               to: "/admin/employee-overview",
-              label: "Employee & Roles",
+              label: "Employee Links & Roles",
               module: "settings" as ModuleKey,
             },
           ],

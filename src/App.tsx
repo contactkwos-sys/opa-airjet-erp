@@ -5,7 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 import { LoadingState } from "@/components/ui";
 
 import LoginPage from "@/pages/LoginPage";
-import SuperAdminLoginPage from "@/pages/SuperAdminLoginPage";
 import DeveloperOverrideLoginPage from "@/pages/DeveloperOverrideLoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoomsPage from "@/pages/LoomsPage";
@@ -115,8 +114,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/super-login" element={<SuperAdminLoginPage />} />
-      <Route path="/admin" element={<SuperAdminLoginPage />} />
+      {/* Legacy Company Admin URLs → unified /login (CEO & Director are roles there). */}
+      <Route path="/super-login" element={<Navigate to="/login" replace />} />
+      <Route path="/admin" element={<Navigate to="/login" replace />} />
       <Route path="/kwos-override" element={<DeveloperOverrideLoginPage />} />
       <Route path="/dev-console" element={<DeveloperOverrideLoginPage />} />
       <Route path="/security/login" element={<SecurityLoginPage />} />

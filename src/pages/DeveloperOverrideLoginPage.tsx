@@ -7,7 +7,7 @@ import { AppFooter } from "@/components/layout/AppFooter";
 
 /**
  * Tier 2 — Developer Override (Kumaresh / technical emergency access).
- * Hidden route: /kwos-override — separate from Company Admin /super-login.
+ * Hidden route: /kwos-override — separate from the unified /login (CEO / Director).
  * Default role PIN: 7408 (change after first login via Settings).
  */
 export default function DeveloperOverrideLoginPage() {

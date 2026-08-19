@@ -1,13 +1,9 @@
 -- Split Super Admin into Company Admin (day-to-day PIN/employee mgmt)
 -- and Developer Override (SUPER_ADMIN — emergency / technical only).
+-- Requires 202608200050_company_admin_role_enum.sql (COMPANY_ADMIN enum) first.
 
 -- ---------------------------------------------------------------------------
--- 1) New role
--- ---------------------------------------------------------------------------
-ALTER TYPE opa_role ADD VALUE IF NOT EXISTS 'COMPANY_ADMIN';
-
--- ---------------------------------------------------------------------------
--- 2) Gate helpers
+-- 1) Gate helpers
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION opa_require_super_admin()
 RETURNS opa_profiles
@@ -419,7 +415,7 @@ $$;
 -- 5) Seed Company Admin named logins + developer role pin label
 -- ---------------------------------------------------------------------------
 -- Ops reference (rotate in production):
---   Company Admin — Aishwarya 3501 | Director 3502
+--   Company Admin — CEO 3501 | Director 3502
 --   Developer Override (SUPER_ADMIN role PIN) — 7408  (was 9999; change after deploy)
 
 INSERT INTO opa_role_pins (role, pin_hash, label, auth_email) VALUES
@@ -445,13 +441,26 @@ UPDATE opa_role_pins
        updated_at = now()
  WHERE role = 'SUPER_ADMIN';
 
+-- Rename legacy seed "Aishwarya" → "CEO" if an earlier draft was applied.
+UPDATE opa_pin_employees
+   SET display_name = 'CEO',
+       auth_email = 'pin.company.ceo@opa.internal',
+       pin_hash = extensions.crypt('3501', extensions.gen_salt('bf')),
+       is_active = TRUE,
+       failed_attempts = 0,
+       locked_until = NULL,
+       pin_updated_at = now(),
+       updated_at = now()
+ WHERE role = 'COMPANY_ADMIN'::opa_role
+   AND display_name = 'Aishwarya';
+
 INSERT INTO opa_pin_employees (role, display_name, pin_hash, auth_email)
 VALUES
   (
     'COMPANY_ADMIN',
-    'Aishwarya',
+    'CEO',
     extensions.crypt('3501', extensions.gen_salt('bf')),
-    'pin.company.aishwarya@opa.internal'
+    'pin.company.ceo@opa.internal'
   ),
   (
     'COMPANY_ADMIN',
@@ -462,6 +471,7 @@ VALUES
 ON CONFLICT (role, display_name) DO UPDATE
 SET
   pin_hash = EXCLUDED.pin_hash,
+  auth_email = EXCLUDED.auth_email,
   is_active = TRUE,
   failed_attempts = 0,
   locked_until = NULL,

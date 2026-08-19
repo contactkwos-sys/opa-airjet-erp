@@ -106,6 +106,7 @@ async function applyViaManagementApi(token, files) {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
+        "User-Agent": "opa-airjet-erp-db-migrate/1.0",
       },
       body: JSON.stringify({ query: sql }),
     });

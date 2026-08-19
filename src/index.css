@@ -911,6 +911,25 @@ tbody tr:hover {
   min-width: min(240px, 100%);
 }
 
+.sticky-add-panel {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 2;
+  box-shadow: 0 10px 28px rgba(15, 40, 55, 0.08);
+}
+
+.bulk-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.session-pin {
+  font-size: 1.15rem;
+  letter-spacing: 0.2em;
+}
+
 .stat.amber .value { color: var(--amber); }
 .stat.sky .value { color: var(--sky); }
 

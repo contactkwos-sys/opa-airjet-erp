@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
@@ -28,6 +28,14 @@ type PinEmployee = {
   created_at: string;
 };
 
+type SessionAdded = {
+  id: string;
+  role: OpaRole;
+  display_name: string;
+  temporary_pin: string;
+  added_at: string;
+};
+
 /**
  * Super Admin only — Employee & Role Overview.
  * Route: /admin/employee-overview (not linked from public UI).
@@ -39,14 +47,14 @@ export default function EmployeeRoleOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [oneTimePin, setOneTimePin] = useState<string | null>(null);
-  const [oneTimeLabel, setOneTimeLabel] = useState<string | null>(null);
+  const [sessionAdded, setSessionAdded] = useState<SessionAdded[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [newRole, setNewRole] = useState<OpaRole>("SECURITY_GUARD");
   const [newName, setNewName] = useState("");
   const [newPin, setNewPin] = useState("");
   const [creating, setCreating] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const [setPinForId, setSetPinForId] = useState<string | null>(null);
   const [manualPin, setManualPin] = useState("");
@@ -75,6 +83,12 @@ export default function EmployeeRoleOverviewPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!creating) {
+      nameInputRef.current?.focus();
+    }
+  }, [creating, sessionAdded.length]);
+
   const byRole = useMemo(() => {
     const map = new Map<OpaRole, PinEmployee[]>();
     for (const r of [...EMPLOYEE_PIN_LOGIN_ROLES, ...PIN_MANAGED_ROLES]) {
@@ -94,13 +108,21 @@ export default function EmployeeRoleOverviewPage() {
     e.preventDefault();
     setMessage(null);
     setError(null);
-    setOneTimePin(null);
+    const name = newName.trim();
+    if (name.length < 2) {
+      setError("Enter an employee name.");
+      return;
+    }
+    if (newPin && !/^[0-9]{4}$/.test(newPin)) {
+      setError("Starting PIN must be exactly 4 digits (or leave blank to auto-generate).");
+      return;
+    }
     const sb = getSupabase();
     if (!sb) return;
     setCreating(true);
     const { data, error: rpcError } = await sb.rpc("opa_create_pin_employee", {
       p_role: newRole,
-      p_display_name: newName.trim(),
+      p_display_name: name,
       p_pin: newPin.trim() || null,
     });
     setCreating(false);
@@ -110,20 +132,30 @@ export default function EmployeeRoleOverviewPage() {
     }
     const row = Array.isArray(data) ? data[0] : data;
     const temp = String(row?.temporary_pin ?? "");
-    setOneTimePin(temp);
-    setOneTimeLabel(`New PIN for ${newName.trim()}`);
+    const empId = String(row?.employee_id ?? "");
+    setSessionAdded((prev) => [
+      {
+        id: empId || `${Date.now()}`,
+        role: newRole,
+        display_name: name,
+        temporary_pin: temp,
+        added_at: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
     setMessage(
-      `Created ${newName.trim()} under ${ROLE_PIN_LABELS[newRole]}. Copy the PIN now — it will not be shown again.`,
+      `Added ${name} (${ROLE_PIN_LABELS[newRole]}). Form is ready for the next employee — role kept.`,
     );
+    // Keep role; clear name + PIN for rapid successive adds (no re-navigation).
     setNewName("");
     setNewPin("");
     void load();
+    queueMicrotask(() => nameInputRef.current?.focus());
   }
 
   async function handleSetPin(emp: PinEmployee, useManual: boolean) {
     setMessage(null);
     setError(null);
-    setOneTimePin(null);
     const sb = getSupabase();
     if (!sb) return;
     if (useManual && !/^[0-9]{4}$/.test(manualPin)) {
@@ -141,10 +173,18 @@ export default function EmployeeRoleOverviewPage() {
       return;
     }
     const temp = String(data ?? "");
-    setOneTimePin(temp);
-    setOneTimeLabel(`New PIN for ${emp.display_name}`);
+    setSessionAdded((prev) => [
+      {
+        id: emp.id,
+        role: emp.role,
+        display_name: emp.display_name,
+        temporary_pin: temp,
+        added_at: new Date().toISOString(),
+      },
+      ...prev.filter((s) => s.id !== emp.id),
+    ]);
     setMessage(
-      `PIN updated for ${emp.display_name}. Copy it now — it will not be shown again.`,
+      `PIN updated for ${emp.display_name}. Copy it from the session list below — it will not be shown again after you leave.`,
     );
     setSetPinForId(null);
     setManualPin("");
@@ -158,43 +198,20 @@ export default function EmployeeRoleOverviewPage() {
     <>
       <PageHeader
         title="Employee & Role Overview"
-        subtitle="Named PIN logins per role. Existing PINs are never displayed — only set or regenerate."
+        subtitle="Add named PIN logins under each role. Stay on this page to add many in a row — role is kept after each add."
       />
 
       {message ? <AlertBanner tone="info" title={message} /> : null}
       {error ? <AlertBanner tone="danger" title={error} /> : null}
 
-      {oneTimePin ? (
-        <div className="one-time-pin panel page-card" role="status">
-          <span className="label">{oneTimeLabel ?? "Temporary PIN (copy now)"}</span>
-          <code className="one-time-pin-value">{oneTimePin}</code>
-          <div className="one-time-pin-actions">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                void navigator.clipboard?.writeText(oneTimePin);
-              }}
-            >
-              Copy
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                setOneTimePin(null);
-                setOneTimeLabel(null);
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <section className="panel page-card">
+      <section className="panel page-card sticky-add-panel">
         <h3>Add employee</h3>
-        <form className="form-grid" onSubmit={(e) => void handleCreate(e)}>
+        <p className="muted">
+          Enter name + optional starting PIN, press Add &amp; next. Role stays selected so you can
+          add the whole team without leaving this screen. Copy each one-time PIN from the session
+          list — existing PINs are never shown again later.
+        </p>
+        <form className="form-grid bulk-add-form" onSubmit={(e) => void handleCreate(e)}>
           <TextSelect
             label="Role"
             value={newRole}
@@ -206,15 +223,20 @@ export default function EmployeeRoleOverviewPage() {
               </option>
             ))}
           </TextSelect>
+          <label className="form-field">
+            <span className="form-label">Employee name</span>
+            <input
+              ref={nameInputRef}
+              className="form-control"
+              required
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Pawan Bhai"
+              autoComplete="off"
+            />
+          </label>
           <TextInput
-            label="Employee name"
-            required
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Pawan Bhai"
-          />
-          <TextInput
-            label="PIN (optional — leave blank to auto-generate)"
+            label="Starting PIN (optional — blank = auto-generate)"
             inputMode="numeric"
             autoComplete="off"
             maxLength={4}
@@ -223,20 +245,73 @@ export default function EmployeeRoleOverviewPage() {
               setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))
             }
           />
-          <div>
+          <div className="bulk-add-actions">
             <button type="submit" className="btn btn-primary" disabled={creating}>
-              {creating ? "Creating…" : "Add employee"}
+              {creating ? "Adding…" : "Add & next"}
             </button>
           </div>
         </form>
       </section>
+
+      {sessionAdded.length > 0 ? (
+        <section className="panel page-card">
+          <h3>This session — copy PINs now</h3>
+          <p className="muted">
+            Shown once for this browser session. After you leave or dismiss, these values are gone.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Starting PIN</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {sessionAdded.map((row) => (
+                  <tr key={`${row.id}-${row.added_at}`}>
+                    <td>{row.display_name}</td>
+                    <td>{ROLE_PIN_LABELS[row.role]}</td>
+                    <td>
+                      <code className="one-time-pin-value session-pin">{row.temporary_pin}</code>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(row.temporary_pin);
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setSessionAdded([])}
+          >
+            Clear session PIN list
+          </button>
+        </section>
+      ) : null}
 
       {loading ? (
         <LoadingState label="Loading employees…" />
       ) : (
         byRole.map(([r, list]) => (
           <section className="panel page-card" key={r}>
-            <h3>{ROLE_PIN_LABELS[r]}</h3>
+            <h3>
+              {ROLE_PIN_LABELS[r]}{" "}
+              <span className="muted">({list.length})</span>
+            </h3>
             {list.length === 0 ? (
               <p className="muted">No employees under this role yet.</p>
             ) : (
@@ -315,7 +390,6 @@ export default function EmployeeRoleOverviewPage() {
                               onClick={() => {
                                 setSetPinForId(emp.id);
                                 setManualPin("");
-                                setOneTimePin(null);
                               }}
                             >
                               Set New PIN

@@ -15,10 +15,11 @@ Without Supabase credentials the app shows a configuration warning on the login 
 ## Login
 
 - **Employee login (`/login`):** pick Role (Plant Manager, Production Manager, or Security) → pick Name → enter personal 4-digit PIN. Validated by the `pin-login` Edge Function against bcrypt hashes — never checked in the frontend.
-- **Super Admin (hidden):** `/super-login` (alias `/admin`) — not linked from the public UI. PIN entry (email recovery available on that page only).
-- **Admin tools:** Settings → Role PIN Management (emergency reset, PIN change history, locked accounts) and `/admin/employee-overview` after Super Admin sign-in.
+- **Company Admin (hidden):** `/super-login` (alias `/admin`) — named logins (Aishwarya / Director). Employee & Role Overview, role PIN rotate, PIN history, unlock locked accounts. No email recovery; no emergency reset.
+- **Developer Override (hidden):** `/kwos-override` (alias `/dev-console`) — separate developer-only PIN for emergency reset, full ERP, and email recovery. Does not share day-to-day Company Admin usage.
+- **Admin tools:** Settings → Role PIN Management / history / locked accounts; `/admin/employee-overview` after Company Admin or Developer sign-in. Emergency Reset appears for Developer Override only.
 
-Apply migrations `202608181200_opa_role_pins.sql`, `202608181210_opa_role_pins_fix.sql`, and `202608190100_opa_pin_employees_audit.sql`, then deploy `supabase/functions/pin-login`.
+Apply migrations through `202608200100_company_admin_dev_override.sql`, then deploy `supabase/functions/pin-login`.
 
 ## Environment
 

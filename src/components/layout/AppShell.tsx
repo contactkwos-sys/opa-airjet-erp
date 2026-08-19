@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import type { ModuleKey } from "@/lib/permissions";
+import { isPinAdmin } from "@/lib/adminTiers";
 import { AppFooter } from "@/components/layout/AppFooter";
 
 export type NavItem = { to: string; label: string; module: ModuleKey };
@@ -129,8 +130,8 @@ export function AppShell() {
       items: group.items.filter((item) => can(item.module, "view")),
     })).filter((group) => group.items.length > 0);
 
-    // Super Admin–only tools (reachable after /super-login; not on public login).
-    if (role === "SUPER_ADMIN") {
+    // Company Admin + Developer Override tools (hidden login routes).
+    if (isPinAdmin(role)) {
       return groups.map((group) => {
         if (group.id !== "system") return group;
         const hasOverview = group.items.some(

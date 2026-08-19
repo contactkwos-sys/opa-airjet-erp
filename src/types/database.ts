@@ -10,6 +10,7 @@ export type Json =
 
 export type OpaRole =
   | "SUPER_ADMIN"
+  | "COMPANY_ADMIN"
   | "CEO"
   | "DIRECTOR"
   | "FACTORY_MANAGER"

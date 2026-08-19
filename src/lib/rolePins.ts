@@ -2,7 +2,8 @@ import type { OpaRole } from "@/types/database";
 
 /** Human labels for PIN login role picker (no secrets). */
 export const ROLE_PIN_LABELS: Record<OpaRole, string> = {
-  SUPER_ADMIN: "Super Admin",
+  SUPER_ADMIN: "Developer Override",
+  COMPANY_ADMIN: "Company Admin",
   CEO: "CEO",
   DIRECTOR: "Director",
   FACTORY_MANAGER: "Plant Manager",
@@ -23,7 +24,7 @@ export const ROLE_PIN_LABELS: Record<OpaRole, string> = {
 
 /**
  * Roles shown on the public employee login screen.
- * Super Admin is intentionally excluded — use the hidden /super-login route.
+ * Company Admin and Developer Override use hidden routes.
  */
 export const EMPLOYEE_PIN_LOGIN_ROLES: OpaRole[] = [
   "FACTORY_MANAGER",
@@ -31,8 +32,8 @@ export const EMPLOYEE_PIN_LOGIN_ROLES: OpaRole[] = [
   "SECURITY_GUARD",
 ];
 
-/** All roles that can have a PIN (admin management + audit). */
-export const PIN_MANAGED_ROLES: OpaRole[] = [
+/** Operational roles Company Admin can manage (PINs / employees). */
+export const COMPANY_PIN_MANAGED_ROLES: OpaRole[] = [
   "FACTORY_MANAGER",
   "PRODUCTION_MANAGER",
   "PRODUCTION_SUPERVISOR",
@@ -49,6 +50,11 @@ export const PIN_MANAGED_ROLES: OpaRole[] = [
   "SECURITY_GUARD",
   "CEO",
   "DIRECTOR",
+];
+
+/** All roles that can have a PIN (includes developer override for Tier 2). */
+export const PIN_MANAGED_ROLES: OpaRole[] = [
+  ...COMPANY_PIN_MANAGED_ROLES,
   "SUPER_ADMIN",
 ];
 

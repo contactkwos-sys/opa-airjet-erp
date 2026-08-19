@@ -5,7 +5,8 @@ import { listRows, updateRow, type Row } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { settingsFormSchema, validateForm } from "@/lib/validation";
-import { PIN_MANAGED_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
+import { PIN_MANAGED_ROLES, COMPANY_PIN_MANAGED_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
+import { isDeveloperOverride, isPinAdmin } from "@/lib/adminTiers";
 import type { OpaRole } from "@/types/database";
 import {
   PageHeader,
@@ -65,7 +66,9 @@ const empty: Settings = {
 export default function SettingsPage() {
   const { profile, can, role } = useAuth();
   const canEdit = can("settings", "edit");
-  const isSuperAdmin = role === "SUPER_ADMIN";
+  const pinAdmin = isPinAdmin(role);
+  const developer = isDeveloperOverride(role);
+  const managedRoles = developer ? PIN_MANAGED_ROLES : COMPANY_PIN_MANAGED_ROLES;
   const [form, setForm] = useState<Settings>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -125,7 +128,7 @@ export default function SettingsPage() {
   }, []);
 
   const loadAdminPinData = useCallback(async () => {
-    if (!isSuperAdmin) return;
+    if (!pinAdmin) return;
     const sb = getSupabase();
     if (!sb) return;
     const [histRes, lockedRes] = await Promise.all([
@@ -144,7 +147,7 @@ export default function SettingsPage() {
     if (!lockedRes.error && lockedRes.data) {
       setLocked(lockedRes.data as LockedAccount[]);
     }
-  }, [isSuperAdmin]);
+  }, [pinAdmin]);
 
   const loadMyPinAccount = useCallback(async () => {
     const sb = getSupabase();
@@ -220,7 +223,7 @@ export default function SettingsPage() {
 
   async function handlePinRotate(e: React.FormEvent) {
     e.preventDefault();
-    if (!isSuperAdmin) return;
+    if (!pinAdmin) return;
     setPinMessage(null);
     setPinError(null);
     setOneTimePin(null);
@@ -250,7 +253,7 @@ export default function SettingsPage() {
 
   async function handleEmergencyReset(e: React.FormEvent) {
     e.preventDefault();
-    if (!isSuperAdmin) return;
+    if (!developer) return;
     setPinMessage(null);
     setPinError(null);
     setOneTimePin(null);
@@ -277,7 +280,7 @@ export default function SettingsPage() {
   }
 
   async function handleUnlock(account: LockedAccount) {
-    if (!isSuperAdmin) return;
+    if (!pinAdmin) return;
     const sb = getSupabase();
     if (!sb) return;
     setAdminBusy(true);
@@ -330,7 +333,7 @@ export default function SettingsPage() {
     setCurrentPin("");
     setNewSelfPin("");
     setConfirmSelfPin("");
-    if (isSuperAdmin) void loadAdminPinData();
+    if (pinAdmin) void loadAdminPinData();
   }
 
   if (loading) return <LoadingState label="Loading settings…" />;
@@ -524,7 +527,7 @@ export default function SettingsPage() {
         </ul>
       </section>
 
-      {isSuperAdmin ? (
+      {pinAdmin ? (
         <>
           <section className="panel page-card">
             <h3>Role PIN management</h3>
@@ -565,7 +568,7 @@ export default function SettingsPage() {
                 value={pinRole}
                 onChange={(e) => setPinRole(e.target.value as OpaRole)}
               >
-                {PIN_MANAGED_ROLES.map((r) => (
+                {managedRoles.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_PIN_LABELS[r]}
                   </option>
@@ -589,35 +592,37 @@ export default function SettingsPage() {
             </form>
           </section>
 
-          <section className="panel page-card">
-            <h3>Emergency Reset</h3>
-            <p>
-              Generate a temporary system PIN for any role. Shown once only —
-              never stored in plain text.
-            </p>
-            <form className="form-grid" onSubmit={(e) => void handleEmergencyReset(e)}>
-              <TextSelect
-                label="Role to reset"
-                value={resetRole}
-                onChange={(e) => setResetRole(e.target.value as OpaRole)}
-              >
-                {PIN_MANAGED_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_PIN_LABELS[r]}
-                  </option>
-                ))}
-              </TextSelect>
-              <div>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={resetting}
+          {developer ? (
+            <section className="panel page-card">
+              <h3>Emergency Reset</h3>
+              <p>
+                Developer Override only. Generate a temporary system PIN for any
+                role. Shown once only — never stored in plain text.
+              </p>
+              <form className="form-grid" onSubmit={(e) => void handleEmergencyReset(e)}>
+                <TextSelect
+                  label="Role to reset"
+                  value={resetRole}
+                  onChange={(e) => setResetRole(e.target.value as OpaRole)}
                 >
-                  {resetting ? "Resetting…" : "Generate temporary PIN"}
-                </button>
-              </div>
-            </form>
-          </section>
+                  {PIN_MANAGED_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_PIN_LABELS[r]}
+                    </option>
+                  ))}
+                </TextSelect>
+                <div>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={resetting}
+                  >
+                    {resetting ? "Resetting…" : "Generate temporary PIN"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          ) : null}
 
           <section className="panel page-card">
             <h3>PIN Change History</h3>

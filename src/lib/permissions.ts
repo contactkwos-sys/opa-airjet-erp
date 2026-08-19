@@ -2,6 +2,7 @@ import type { OpaRole } from "@/types/database";
 
 export const ROLES: OpaRole[] = [
   "SUPER_ADMIN",
+  "COMPANY_ADMIN",
   "CEO",
   "DIRECTOR",
   "FACTORY_MANAGER",
@@ -94,6 +95,12 @@ export const DEFAULT_MODULE_ACCESS: Record<
   Record<ModuleKey, ModuleAccess>
 > = {
   SUPER_ADMIN: allModules(full),
+  // Company Admin: employee/PIN management only — not full ERP.
+  COMPANY_ADMIN: {
+    ...allModules(none),
+    dashboard: viewOnly,
+    settings: full,
+  },
   CEO: allModules({ ...full, delete: false }),
   DIRECTOR: allModules({ ...full, delete: false }),
   FACTORY_MANAGER: allModules({ ...full, delete: false }),

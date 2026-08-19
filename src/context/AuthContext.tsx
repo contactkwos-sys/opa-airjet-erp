@@ -62,15 +62,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(async ({ data }) => {
         if (cancelled) return;
-        setSession(data.session);
-        if (data.session?.user) {
-          const p = await fetchProfile(data.session.user.id);
-          if (!cancelled) setProfile(p);
-        } else {
+        if (!data.session) {
+          setSession(null);
           setProfile(null);
+          return;
         }
+        // Validate token with the server — clears corrupt/stale local sessions
+        // that would otherwise crash the login redirect path.
+        const { data: userData, error: userError } = await sb.auth.getUser();
+        if (cancelled) return;
+        if (userError || !userData.user) {
+          await sb.auth.signOut();
+          if (!cancelled) {
+            setSession(null);
+            setProfile(null);
+          }
+          return;
+        }
+        setSession(data.session);
+        const p = await fetchProfile(userData.user.id);
+        if (!cancelled) setProfile(p);
       })
-      .catch(() => {
+      .catch(async () => {
+        try {
+          await sb.auth.signOut();
+        } catch {
+          /* ignore */
+        }
         if (!cancelled) {
           setSession(null);
           setProfile(null);

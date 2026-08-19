@@ -5,7 +5,7 @@ import { loginFormSchema } from "@/lib/validation";
 import { isSupabaseConfigured } from "@/lib/env";
 import { PIN_LOGIN_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
 import type { OpaRole } from "@/types/database";
-import { TextInput, TextSelect, AlertBanner } from "@/components/ui";
+import { TextInput, TextSelect, AlertBanner, LoadingState } from "@/components/ui";
 
 export default function LoginPage() {
   const { signIn, signInWithPin, session, loading } = useAuth();
@@ -19,10 +19,6 @@ export default function LoginPage() {
   const [showRecovery, setShowRecovery] = useState(false);
   const inFlight = useRef(false);
 
-  if (!loading && session) {
-    return <Navigate to="/" replace />;
-  }
-
   function pushDigit(d: string) {
     if (inFlight.current) return;
     setError(null);
@@ -35,8 +31,9 @@ export default function LoginPage() {
     setError(null);
   }
 
+  // Hooks must run unconditionally — never return before this effect.
   useEffect(() => {
-    if (pin.length !== 4 || inFlight.current) return;
+    if (session || loading || pin.length !== 4 || inFlight.current) return;
     let cancelled = false;
     async function autoSubmit() {
       inFlight.current = true;
@@ -60,7 +57,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [pin, role, signInWithPin, navigate]);
+  }, [pin, role, signInWithPin, navigate, session, loading]);
 
   async function onRecoverySubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +75,14 @@ export default function LoginPage() {
       return;
     }
     navigate("/");
+  }
+
+  if (loading) {
+    return <LoadingState label="Starting OPA ERP…" />;
+  }
+
+  if (session) {
+    return <Navigate to="/" replace />;
   }
 
   return (

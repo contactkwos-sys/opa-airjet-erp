@@ -21,8 +21,18 @@ export const ROLE_PIN_LABELS: Record<OpaRole, string> = {
   QUALITY_MANAGER: "Quality Manager",
 };
 
-/** Roles shown on the PIN login screen (shop-floor first). */
-export const PIN_LOGIN_ROLES: OpaRole[] = [
+/**
+ * Roles shown on the public employee login screen.
+ * Super Admin is intentionally excluded — use the hidden /super-login route.
+ */
+export const EMPLOYEE_PIN_LOGIN_ROLES: OpaRole[] = [
+  "FACTORY_MANAGER",
+  "PRODUCTION_MANAGER",
+  "SECURITY_GUARD",
+];
+
+/** All roles that can have a PIN (admin management + audit). */
+export const PIN_MANAGED_ROLES: OpaRole[] = [
   "FACTORY_MANAGER",
   "PRODUCTION_MANAGER",
   "PRODUCTION_SUPERVISOR",
@@ -41,3 +51,9 @@ export const PIN_LOGIN_ROLES: OpaRole[] = [
   "DIRECTOR",
   "SUPER_ADMIN",
 ];
+
+/** @deprecated Use EMPLOYEE_PIN_LOGIN_ROLES for public login. */
+export const PIN_LOGIN_ROLES = EMPLOYEE_PIN_LOGIN_ROLES;
+
+/** Failed PIN attempts before lockout. */
+export const PIN_MAX_FAILED_ATTEMPTS = 5;

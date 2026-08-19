@@ -3,7 +3,7 @@ import { listRows, updateRow, type Row } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { settingsFormSchema, validateForm } from "@/lib/validation";
-import { PIN_LOGIN_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
+import { PIN_MANAGED_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
 import type { OpaRole } from "@/types/database";
 import {
   PageHeader,
@@ -298,7 +298,7 @@ export default function SettingsPage() {
               value={pinRole}
               onChange={(e) => setPinRole(e.target.value as OpaRole)}
             >
-              {PIN_LOGIN_ROLES.map((r) => (
+              {PIN_MANAGED_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_PIN_LABELS[r]}
                 </option>

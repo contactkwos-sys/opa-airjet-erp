@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import type { ModuleKey } from "@/lib/permissions";
+import { AppFooter } from "@/components/layout/AppFooter";
 
 export type NavItem = { to: string; label: string; module: ModuleKey };
 export type NavGroup = { id: string; label: string; items: NavItem[] };
@@ -213,19 +214,7 @@ export function AppShell() {
         <div className="main-content">
           <Outlet />
         </div>
-        <footer className="app-footer">
-          <p className="app-footer-brand">Built by Kumaresh Budhia | Powered by KWOS</p>
-          <p className="app-footer-support">
-            Support:{" "}
-            <a
-              href="https://wa.me/919825063208"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              WhatsApp +91 98250 63208
-            </a>
-          </p>
-        </footer>
+        <AppFooter />
       </main>
     </div>
   );

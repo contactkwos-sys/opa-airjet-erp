@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { LoadingState } from "@/components/ui";
 
 import LoginPage from "@/pages/LoginPage";
+import SuperAdminLoginPage from "@/pages/SuperAdminLoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoomsPage from "@/pages/LoomsPage";
 import LoomDetailPage from "@/pages/LoomDetailPage";
@@ -112,6 +113,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/super-login" element={<SuperAdminLoginPage />} />
+      <Route path="/admin" element={<SuperAdminLoginPage />} />
       <Route path="/security/login" element={<SecurityLoginPage />} />
       <Route path="/ceo/visit/:token" element={<CeoVisitMobilePage />} />
       <Route path="/ceo/approve/:token" element={<CeoApprovalPage />} />

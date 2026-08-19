@@ -15,18 +15,21 @@ type DirectoryEmployee = {
 };
 
 function isLoginRole(value: string | null): value is OpaRole {
-  return Boolean(value && (EMPLOYEE_PIN_LOGIN_ROLES as string[]).includes(value));
+  if (!value) return false;
+  const normalized = value.trim().toUpperCase();
+  return (EMPLOYEE_PIN_LOGIN_ROLES as string[]).includes(normalized);
 }
 
 export default function LoginPage() {
   const { signInWithPin, session, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const deepRole = searchParams.get("role");
+  const deepRoleRaw = searchParams.get("role");
+  const deepRole = deepRoleRaw?.trim().toUpperCase() ?? null;
   const deepEmployeeId = searchParams.get("e")?.trim() ?? "";
 
   const [role, setRole] = useState<OpaRole>(() =>
-    isLoginRole(deepRole) ? deepRole : "FACTORY_MANAGER",
+    isLoginRole(deepRole) ? (deepRole as OpaRole) : "FACTORY_MANAGER",
   );
   const [employeeId, setEmployeeId] = useState(deepEmployeeId);
   const [employees, setEmployees] = useState<DirectoryEmployee[]>([]);

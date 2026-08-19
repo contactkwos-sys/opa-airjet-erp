@@ -23,16 +23,18 @@ export const ROLE_PIN_LABELS: Record<OpaRole, string> = {
 };
 
 /**
- * Roles shown on the public employee login screen.
- * Company Admin and Developer Override use hidden routes.
+ * Roles shown on the public /login screen (everyone including CEO & Director).
+ * Developer Override stays on the hidden /kwos-override route only.
  */
 export const EMPLOYEE_PIN_LOGIN_ROLES: OpaRole[] = [
+  "CEO",
+  "DIRECTOR",
   "FACTORY_MANAGER",
   "PRODUCTION_MANAGER",
   "SECURITY_GUARD",
 ];
 
-/** Operational roles Company Admin can manage (PINs / employees). */
+/** Operational roles CEO/Director can manage (PINs / employees). */
 export const COMPANY_PIN_MANAGED_ROLES: OpaRole[] = [
   "FACTORY_MANAGER",
   "PRODUCTION_MANAGER",
@@ -48,8 +50,6 @@ export const COMPANY_PIN_MANAGED_ROLES: OpaRole[] = [
   "QUALITY_MANAGER",
   "SECURITY_HEAD",
   "SECURITY_GUARD",
-  "CEO",
-  "DIRECTOR",
 ];
 
 /** All roles that can have a PIN (includes developer override for Tier 2). */

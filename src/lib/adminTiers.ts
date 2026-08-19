@@ -1,8 +1,13 @@
 import type { OpaRole } from "@/types/database";
 
-/** Day-to-day employee / PIN management (CEO/Director Company Admin). */
+/** Day-to-day employee / PIN management (CEO, Director, legacy Company Admin, Developer). */
 export function isPinAdmin(role: OpaRole | null | undefined): boolean {
-  return role === "COMPANY_ADMIN" || role === "SUPER_ADMIN";
+  return (
+    role === "CEO" ||
+    role === "DIRECTOR" ||
+    role === "COMPANY_ADMIN" ||
+    role === "SUPER_ADMIN"
+  );
 }
 
 /** Developer Override only — emergency reset, full ERP, email recovery. */

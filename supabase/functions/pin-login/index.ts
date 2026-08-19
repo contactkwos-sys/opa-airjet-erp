@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
         role: resolvedRole,
         is_active: true,
         employee_id: resolvedEmployeeId
-          ? `PIN-EMP-${resolvedEmployeeId.slice(0, 8)}`
+          ? resolvedEmployeeId
           : `PIN-${resolvedRole}`,
         updated_at: new Date().toISOString(),
       },

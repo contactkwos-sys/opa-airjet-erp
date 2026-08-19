@@ -84,6 +84,18 @@ export default function SettingsPage() {
   const [locked, setLocked] = useState<LockedAccount[]>([]);
   const [adminBusy, setAdminBusy] = useState(false);
 
+  const [myPinAccount, setMyPinAccount] = useState<{
+    employee_id: string;
+    display_name: string;
+    role: OpaRole;
+  } | null>(null);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newSelfPin, setNewSelfPin] = useState("");
+  const [confirmSelfPin, setConfirmSelfPin] = useState("");
+  const [selfPinSaving, setSelfPinSaving] = useState(false);
+  const [selfPinMessage, setSelfPinMessage] = useState<string | null>(null);
+  const [selfPinError, setSelfPinError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     const [settings, shiftRows] = await Promise.all([
@@ -134,6 +146,29 @@ export default function SettingsPage() {
     }
   }, [isSuperAdmin]);
 
+  const loadMyPinAccount = useCallback(async () => {
+    const sb = getSupabase();
+    if (!sb) {
+      setMyPinAccount(null);
+      return;
+    }
+    const { data, error } = await sb.rpc("opa_resolve_my_pin_employee");
+    if (error || !data) {
+      setMyPinAccount(null);
+      return;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.employee_id) {
+      setMyPinAccount(null);
+      return;
+    }
+    setMyPinAccount({
+      employee_id: String(row.employee_id),
+      display_name: String(row.display_name ?? profile?.full_name ?? "Employee"),
+      role: row.role as OpaRole,
+    });
+  }, [profile?.full_name]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -141,6 +176,10 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadAdminPinData();
   }, [loadAdminPinData]);
+
+  useEffect(() => {
+    void loadMyPinAccount();
+  }, [loadMyPinAccount]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -256,6 +295,44 @@ export default function SettingsPage() {
     void loadAdminPinData();
   }
 
+  async function handleChangeMyPin(e: React.FormEvent) {
+    e.preventDefault();
+    setSelfPinMessage(null);
+    setSelfPinError(null);
+    if (!/^[0-9]{4}$/.test(currentPin) || !/^[0-9]{4}$/.test(newSelfPin)) {
+      setSelfPinError("PINs must be exactly 4 digits.");
+      return;
+    }
+    if (newSelfPin !== confirmSelfPin) {
+      setSelfPinError("New PIN and confirmation do not match.");
+      return;
+    }
+    if (currentPin === newSelfPin) {
+      setSelfPinError("New PIN must be different from your current PIN.");
+      return;
+    }
+    const sb = getSupabase();
+    if (!sb) {
+      setSelfPinError("Database is not configured.");
+      return;
+    }
+    setSelfPinSaving(true);
+    const { error } = await sb.rpc("opa_change_my_pin", {
+      p_current_pin: currentPin,
+      p_new_pin: newSelfPin,
+    });
+    setSelfPinSaving(false);
+    if (error) {
+      setSelfPinError(error.message);
+      return;
+    }
+    setSelfPinMessage("Your PIN was updated. Use the new PIN next time you sign in.");
+    setCurrentPin("");
+    setNewSelfPin("");
+    setConfirmSelfPin("");
+    if (isSuperAdmin) void loadAdminPinData();
+  }
+
   if (loading) return <LoadingState label="Loading settings…" />;
 
   return (
@@ -266,6 +343,67 @@ export default function SettingsPage() {
       />
 
       {message ? <AlertBanner tone="info" title={message} /> : null}
+
+      {myPinAccount ? (
+        <section className="panel page-card">
+          <h3>Change my PIN</h3>
+          <p>
+            Update your personal login PIN for{" "}
+            <strong>{myPinAccount.display_name}</strong> (
+            {ROLE_PIN_LABELS[myPinAccount.role] ?? myPinAccount.role}). Enter your
+            current PIN, then choose a new 4-digit PIN. Super Admin is not required.
+          </p>
+          {selfPinMessage ? <AlertBanner tone="info" title={selfPinMessage} /> : null}
+          {selfPinError ? <AlertBanner tone="danger" title={selfPinError} /> : null}
+          <form className="form-grid" onSubmit={(e) => void handleChangeMyPin(e)}>
+            <TextInput
+              label="Current PIN"
+              type="password"
+              inputMode="numeric"
+              autoComplete="current-password"
+              maxLength={4}
+              value={currentPin}
+              onChange={(e) =>
+                setCurrentPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              required
+            />
+            <TextInput
+              label="New PIN"
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={4}
+              value={newSelfPin}
+              onChange={(e) =>
+                setNewSelfPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              required
+            />
+            <TextInput
+              label="Confirm new PIN"
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={4}
+              value={confirmSelfPin}
+              onChange={(e) =>
+                setConfirmSelfPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              required
+            />
+            <div>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={selfPinSaving}
+              >
+                {selfPinSaving ? "Updating…" : "Change my PIN"}
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
 
       <div className="fleet-grid">
         <StatCard label="Looms" value={form.loom_count} />

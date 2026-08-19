@@ -45,6 +45,7 @@ export default function DeveloperOverrideLoginPage() {
       const result = await signInWithPin("SUPER_ADMIN", pin);
       if (cancelled) {
         inFlight.current = false;
+        setSubmitting(false);
         return;
       }
       setSubmitting(false);

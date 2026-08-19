@@ -45,6 +45,7 @@ import ApprovalsPage from "@/pages/system/ApprovalsPage";
 import DocumentsPage from "@/pages/system/DocumentsPage";
 import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
+import EmployeeRoleOverviewPage from "@/pages/system/EmployeeRoleOverviewPage";
 import AuditPage from "@/pages/system/AuditPage";
 
 /* Existing Security module — do not remove */
@@ -186,6 +187,7 @@ export default function App() {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="admin/employee-overview" element={<EmployeeRoleOverviewPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

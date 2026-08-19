@@ -94,11 +94,9 @@ export default function SuperAdminLoginPage() {
         </div>
 
         {!isSupabaseConfigured() ? (
-          <AlertBanner
-            tone="warning"
-            title="Configuration required"
-            children="Supabase is not configured."
-          />
+          <AlertBanner tone="warning" title="Configuration required">
+            Supabase is not configured.
+          </AlertBanner>
         ) : null}
 
         {!showEmailRecovery ? (
@@ -154,26 +152,22 @@ export default function SuperAdminLoginPage() {
             <p className="muted recovery-hint">
               Email / password recovery for Super Admin only.
             </p>
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                autoComplete="username"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Password</span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
+            <TextInput
+              label="Email"
+              type="email"
+              autoComplete="username"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <TextInput
+              label="Password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
             {error ? <p className="form-error">{error}</p> : null}
             <button
               type="submit"

@@ -1,23 +1,66 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured } from "@/lib/env";
+import { getSupabase } from "@/lib/supabase";
 import { EMPLOYEE_PIN_LOGIN_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
 import type { OpaRole } from "@/types/database";
 import { TextSelect, AlertBanner, LoadingState } from "@/components/ui";
 import { AppFooter } from "@/components/layout/AppFooter";
 
+type DirectoryEmployee = {
+  id: string;
+  role: OpaRole;
+  display_name: string;
+};
+
 export default function LoginPage() {
   const { signInWithPin, session, loading } = useAuth();
   const navigate = useNavigate();
   const [role, setRole] = useState<OpaRole>("FACTORY_MANAGER");
+  const [employeeId, setEmployeeId] = useState("");
+  const [employees, setEmployees] = useState<DirectoryEmployee[]>([]);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
 
+  const loadEmployees = useCallback(async (selectedRole: OpaRole) => {
+    setDirectoryError(null);
+    const sb = getSupabase();
+    if (!sb) {
+      setEmployees([]);
+      return;
+    }
+    const { data, error: qError } = await sb
+      .from("opa_pin_employee_directory")
+      .select("id, role, display_name")
+      .eq("role", selectedRole)
+      .order("display_name", { ascending: true });
+    if (qError) {
+      setDirectoryError(qError.message);
+      setEmployees([]);
+      setEmployeeId("");
+      return;
+    }
+    const rows = (data ?? []) as DirectoryEmployee[];
+    setEmployees(rows);
+    setEmployeeId(rows[0]?.id ?? "");
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    void loadEmployees(role);
+  }, [role, loadEmployees]);
+
+  const selectedEmployee = useMemo(
+    () => employees.find((e) => e.id === employeeId) ?? null,
+    [employees, employeeId],
+  );
+
   function pushDigit(d: string) {
-    if (inFlight.current) return;
+    if (inFlight.current || !employeeId) return;
     setError(null);
     setPin((prev) => (prev.length >= 4 ? prev : `${prev}${d}`));
   }
@@ -28,15 +71,22 @@ export default function LoginPage() {
     setError(null);
   }
 
-  // Hooks must run unconditionally — never return before this effect.
   useEffect(() => {
-    if (session || loading || pin.length !== 4 || inFlight.current) return;
+    if (
+      session ||
+      loading ||
+      pin.length !== 4 ||
+      inFlight.current ||
+      !employeeId
+    ) {
+      return;
+    }
     let cancelled = false;
     async function autoSubmit() {
       inFlight.current = true;
       setSubmitting(true);
       setError(null);
-      const result = await signInWithPin(role, pin);
+      const result = await signInWithPin(role, pin, employeeId);
       if (cancelled) {
         inFlight.current = false;
         return;
@@ -54,7 +104,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [pin, role, signInWithPin, navigate, session, loading]);
+  }, [pin, role, employeeId, signInWithPin, navigate, session, loading]);
 
   if (loading) {
     return <LoadingState label="Starting OPA ERP…" />;
@@ -76,11 +126,10 @@ export default function LoginPage() {
         </div>
 
         {!isSupabaseConfigured() ? (
-          <AlertBanner
-            tone="warning"
-            title="Configuration required"
-            children="Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable sign-in."
-          />
+          <AlertBanner tone="warning" title="Configuration required">
+            Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to
+            enable sign-in.
+          </AlertBanner>
         ) : null}
 
         <form
@@ -106,6 +155,36 @@ export default function LoginPage() {
             ))}
           </TextSelect>
 
+          <TextSelect
+            label="Name"
+            value={employeeId}
+            disabled={!isSupabaseConfigured() || submitting || employees.length === 0}
+            onChange={(e) => {
+              setEmployeeId(e.target.value);
+              setPin("");
+              setError(null);
+            }}
+          >
+            {employees.length === 0 ? (
+              <option value="">No employees configured</option>
+            ) : (
+              employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.display_name}
+                </option>
+              ))
+            )}
+          </TextSelect>
+
+          {directoryError ? (
+            <p className="form-error">{directoryError}</p>
+          ) : employees.length === 0 && isSupabaseConfigured() ? (
+            <p className="muted pin-hint">
+              No named logins for {ROLE_PIN_LABELS[role]} yet. Ask Super Admin to
+              add employees.
+            </p>
+          ) : null}
+
           <div className="pin-display" aria-live="polite" aria-label="PIN entry">
             {[0, 1, 2, 3].map((i) => (
               <span key={i} className={`pin-dot${pin.length > i ? " filled" : ""}`} />
@@ -118,7 +197,9 @@ export default function LoginPage() {
                 key={key}
                 type="button"
                 className="pin-key"
-                disabled={!isSupabaseConfigured() || submitting}
+                disabled={
+                  !isSupabaseConfigured() || submitting || !employeeId
+                }
                 onClick={() => {
                   if (key === "C") clearPin();
                   else if (key === "⌫") {
@@ -134,7 +215,11 @@ export default function LoginPage() {
           {error ? <p className="form-error">{error}</p> : null}
 
           <p className="muted pin-hint">
-            {submitting ? "Signing in…" : "Enter your 4-digit PIN"}
+            {submitting
+              ? "Signing in…"
+              : selectedEmployee
+                ? `Enter PIN for ${selectedEmployee.display_name}`
+                : "Select a name, then enter your 4-digit PIN"}
           </p>
         </form>
       </div>

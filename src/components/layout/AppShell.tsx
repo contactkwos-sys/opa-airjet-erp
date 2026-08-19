@@ -118,17 +118,40 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 export function AppShell() {
-  const { profile, signOut, can } = useAuth();
+  const { profile, signOut, can, role } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const visibleGroups = useMemo(() => {
-    return NAV_GROUPS.map((group) => ({
+    const groups = NAV_GROUPS.map((group) => ({
       ...group,
       items: group.items.filter((item) => can(item.module, "view")),
     })).filter((group) => group.items.length > 0);
-  }, [can]);
+
+    // Super Admin–only tools (reachable after /super-login; not on public login).
+    if (role === "SUPER_ADMIN") {
+      return groups.map((group) => {
+        if (group.id !== "system") return group;
+        const hasOverview = group.items.some(
+          (i) => i.to === "/admin/employee-overview",
+        );
+        if (hasOverview) return group;
+        return {
+          ...group,
+          items: [
+            ...group.items,
+            {
+              to: "/admin/employee-overview",
+              label: "Employee & Roles",
+              module: "settings" as ModuleKey,
+            },
+          ],
+        };
+      });
+    }
+    return groups;
+  }, [can, role]);
 
   return (
     <div className={`app-shell${open ? " nav-open" : ""}`}>

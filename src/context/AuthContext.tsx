@@ -12,7 +12,11 @@ type AuthContextValue = {
   role: OpaRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signInWithPin: (role: OpaRole, pin: string) => Promise<{ error: string | null }>;
+  signInWithPin: (
+    role: OpaRole,
+    pin: string,
+    employeeId?: string | null,
+  ) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   can: (module: ModuleKey, action?: PermissionAction) => boolean;
 };
@@ -134,7 +138,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
-  const signInWithPin = useCallback(async (role: OpaRole, pin: string) => {
+  const signInWithPin = useCallback(async (
+    role: OpaRole,
+    pin: string,
+    employeeId?: string | null,
+  ) => {
     const sb = getSupabase();
     if (!sb) {
       return { error: "Database is not configured. Cannot sign in." };
@@ -144,13 +152,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { data, error } = await sb.functions.invoke("pin-login", {
-      body: { role, pin },
+      body: {
+        role,
+        pin,
+        ...(employeeId ? { employee_id: employeeId } : {}),
+      },
     });
 
     if (error) {
       const msg = error.message?.toLowerCase() ?? "";
       if (msg.includes("failed to send") || msg.includes("fetch")) {
-        return { error: "PIN login service is unavailable. Try again or use Super Admin recovery." };
+        return { error: "PIN login service is unavailable. Try again later." };
       }
       return { error: error.message || "PIN login failed." };
     }

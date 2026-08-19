@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import { listRows, updateRow, type Row } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -25,6 +27,26 @@ type Settings = {
   plain_count: number;
   address: string;
   whatsapp_settings?: Record<string, unknown>;
+};
+
+type PinHistoryRow = {
+  id: string;
+  subject_type: string;
+  role: OpaRole;
+  employee_id: string | null;
+  employee_name: string | null;
+  action: string;
+  changed_by_name: string | null;
+  created_at: string;
+};
+
+type LockedAccount = {
+  subject_type: string;
+  subject_id: string;
+  role: OpaRole;
+  display_name: string;
+  failed_attempts: number;
+  locked_until: string;
 };
 
 const empty: Settings = {
@@ -55,6 +77,12 @@ export default function SettingsPage() {
   const [pinSaving, setPinSaving] = useState(false);
   const [pinMessage, setPinMessage] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [resetRole, setResetRole] = useState<OpaRole>("FACTORY_MANAGER");
+  const [resetting, setResetting] = useState(false);
+  const [oneTimePin, setOneTimePin] = useState<string | null>(null);
+  const [history, setHistory] = useState<PinHistoryRow[]>([]);
+  const [locked, setLocked] = useState<LockedAccount[]>([]);
+  const [adminBusy, setAdminBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,9 +112,35 @@ export default function SettingsPage() {
     setLoading(false);
   }, []);
 
+  const loadAdminPinData = useCallback(async () => {
+    if (!isSuperAdmin) return;
+    const sb = getSupabase();
+    if (!sb) return;
+    const [histRes, lockedRes] = await Promise.all([
+      sb
+        .from("opa_pin_change_history")
+        .select(
+          "id, subject_type, role, employee_id, employee_name, action, changed_by_name, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(50),
+      sb.rpc("opa_list_locked_pin_accounts"),
+    ]);
+    if (!histRes.error && histRes.data) {
+      setHistory(histRes.data as PinHistoryRow[]);
+    }
+    if (!lockedRes.error && lockedRes.data) {
+      setLocked(lockedRes.data as LockedAccount[]);
+    }
+  }, [isSuperAdmin]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadAdminPinData();
+  }, [loadAdminPinData]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -109,7 +163,6 @@ export default function SettingsPage() {
       dobby_count: form.dobby_count,
       plain_count: form.plain_count,
       address: form.address,
-      // Never write secrets from the browser
       whatsapp_settings: {
         ...(form.whatsapp_settings ?? {}),
         secrets: "configured on server",
@@ -131,6 +184,7 @@ export default function SettingsPage() {
     if (!isSuperAdmin) return;
     setPinMessage(null);
     setPinError(null);
+    setOneTimePin(null);
     if (!/^[0-9]{4}$/.test(pinValue)) {
       setPinError("PIN must be exactly 4 digits.");
       return;
@@ -152,6 +206,54 @@ export default function SettingsPage() {
     }
     setPinMessage(`PIN updated for ${ROLE_PIN_LABELS[pinRole]}.`);
     setPinValue("");
+    void loadAdminPinData();
+  }
+
+  async function handleEmergencyReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isSuperAdmin) return;
+    setPinMessage(null);
+    setPinError(null);
+    setOneTimePin(null);
+    const sb = getSupabase();
+    if (!sb) {
+      setPinError("Database is not configured.");
+      return;
+    }
+    setResetting(true);
+    const { data, error } = await sb.rpc("opa_emergency_reset_role_pin", {
+      p_role: resetRole,
+    });
+    setResetting(false);
+    if (error) {
+      setPinError(error.message);
+      return;
+    }
+    const temp = String(data ?? "");
+    setOneTimePin(temp);
+    setPinMessage(
+      `Emergency reset for ${ROLE_PIN_LABELS[resetRole]}. Copy the temporary PIN now — it will not be shown again.`,
+    );
+    void loadAdminPinData();
+  }
+
+  async function handleUnlock(account: LockedAccount) {
+    if (!isSuperAdmin) return;
+    const sb = getSupabase();
+    if (!sb) return;
+    setAdminBusy(true);
+    setPinError(null);
+    const { error } = await sb.rpc("opa_unlock_pin_account", {
+      p_subject_type: account.subject_type,
+      p_subject_id: account.subject_id,
+    });
+    setAdminBusy(false);
+    if (error) {
+      setPinError(error.message);
+      return;
+    }
+    setPinMessage(`Unlocked ${account.display_name}.`);
+    void loadAdminPinData();
   }
 
   if (loading) return <LoadingState label="Loading settings…" />;
@@ -251,11 +353,14 @@ export default function SettingsPage() {
       <section className="panel page-card">
         <h3>Shifts</h3>
         <ul className="shift-list">
-          {(shifts.length ? shifts : [
-            { id: "A", code: "A", name: "SHIFT A", start_time: "06:00", end_time: "14:00" },
-            { id: "B", code: "B", name: "SHIFT B", start_time: "14:00", end_time: "22:00" },
-            { id: "C", code: "C", name: "SHIFT C", start_time: "22:00", end_time: "06:00" },
-          ]).map((s) => (
+          {(shifts.length
+            ? shifts
+            : [
+                { id: "A", code: "A", name: "SHIFT A", start_time: "06:00", end_time: "14:00" },
+                { id: "B", code: "B", name: "SHIFT B", start_time: "14:00", end_time: "22:00" },
+                { id: "C", code: "C", name: "SHIFT C", start_time: "22:00", end_time: "06:00" },
+              ]
+          ).map((s) => (
             <li key={String(s.id)}>
               <strong>{String(s.code ?? s.name)}</strong>{" "}
               {String(s.name ?? "")} · {String(s.start_time ?? "")}–{String(s.end_time ?? "")}
@@ -275,52 +380,195 @@ export default function SettingsPage() {
         <ul>
           <li>
             CEO visit notify:{" "}
-            {form.whatsapp_settings?.notify_ceo_on_visit === false
-              ? "Off"
-              : "On"}
+            {form.whatsapp_settings?.notify_ceo_on_visit === false ? "Off" : "On"}
           </li>
           <li>Secrets: configured on server</li>
         </ul>
       </section>
 
       {isSuperAdmin ? (
-        <section className="panel page-card">
-          <h3>Role PIN management</h3>
-          <p>
-            Rotate 4-digit role PINs. Hashes are stored server-side only — the
-            new PIN is never saved in the browser after submit.
-          </p>
-          {pinMessage ? <AlertBanner tone="info" title={pinMessage} /> : null}
-          {pinError ? <AlertBanner tone="danger" title={pinError} /> : null}
-          <form className="form-grid" onSubmit={(e) => void handlePinRotate(e)}>
-            <TextSelect
-              label="Role"
-              value={pinRole}
-              onChange={(e) => setPinRole(e.target.value as OpaRole)}
-            >
-              {PIN_MANAGED_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_PIN_LABELS[r]}
-                </option>
-              ))}
-            </TextSelect>
-            <TextInput
-              label="New 4-digit PIN"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={4}
-              value={pinValue}
-              onChange={(e) =>
-                setPinValue(e.target.value.replace(/\D/g, "").slice(0, 4))
-              }
-            />
-            <div>
-              <button type="submit" className="btn btn-primary" disabled={pinSaving}>
-                {pinSaving ? "Updating…" : "Update role PIN"}
-              </button>
-            </div>
-          </form>
-        </section>
+        <>
+          <section className="panel page-card">
+            <h3>Role PIN management</h3>
+            <p>
+              Rotate 4-digit role PINs. Hashes are stored server-side only — the
+              new PIN is never saved in the browser after submit.
+            </p>
+            <p>
+              <Link to="/admin/employee-overview">Open Employee &amp; Role Overview →</Link>
+            </p>
+            {pinMessage ? <AlertBanner tone="info" title={pinMessage} /> : null}
+            {pinError ? <AlertBanner tone="danger" title={pinError} /> : null}
+            {oneTimePin ? (
+              <div className="one-time-pin" role="status">
+                <span className="label">Temporary PIN (copy now)</span>
+                <code className="one-time-pin-value">{oneTimePin}</code>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(oneTimePin);
+                  }}
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setOneTimePin(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
+            <form className="form-grid" onSubmit={(e) => void handlePinRotate(e)}>
+              <TextSelect
+                label="Role"
+                value={pinRole}
+                onChange={(e) => setPinRole(e.target.value as OpaRole)}
+              >
+                {PIN_MANAGED_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_PIN_LABELS[r]}
+                  </option>
+                ))}
+              </TextSelect>
+              <TextInput
+                label="New 4-digit PIN"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={pinValue}
+                onChange={(e) =>
+                  setPinValue(e.target.value.replace(/\D/g, "").slice(0, 4))
+                }
+              />
+              <div>
+                <button type="submit" className="btn btn-primary" disabled={pinSaving}>
+                  {pinSaving ? "Updating…" : "Update role PIN"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="panel page-card">
+            <h3>Emergency Reset</h3>
+            <p>
+              Generate a temporary system PIN for any role. Shown once only —
+              never stored in plain text.
+            </p>
+            <form className="form-grid" onSubmit={(e) => void handleEmergencyReset(e)}>
+              <TextSelect
+                label="Role to reset"
+                value={resetRole}
+                onChange={(e) => setResetRole(e.target.value as OpaRole)}
+              >
+                {PIN_MANAGED_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_PIN_LABELS[r]}
+                  </option>
+                ))}
+              </TextSelect>
+              <div>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={resetting}
+                >
+                  {resetting ? "Resetting…" : "Generate temporary PIN"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="panel page-card">
+            <h3>PIN Change History</h3>
+            <p>Audit log of role and employee PIN changes.</p>
+            {history.length === 0 ? (
+              <p className="muted">No PIN changes recorded yet.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Role</th>
+                      <th>Subject</th>
+                      <th>Action</th>
+                      <th>By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((h) => (
+                      <tr key={h.id}>
+                        <td>
+                          {format(new Date(h.created_at), "dd MMM yyyy HH:mm")}
+                        </td>
+                        <td>{ROLE_PIN_LABELS[h.role] ?? h.role}</td>
+                        <td>
+                          {h.subject_type === "employee"
+                            ? h.employee_name ?? "Employee"
+                            : "Role PIN"}
+                        </td>
+                        <td>{h.action}</td>
+                        <td>{h.changed_by_name ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="panel page-card">
+            <h3>Locked Accounts</h3>
+            <p>
+              Accounts locked after too many wrong PIN attempts. Unlock to clear
+              the lockout.
+            </p>
+            {locked.length === 0 ? (
+              <p className="muted">No locked accounts.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Name</th>
+                      <th>Role</th>
+                      <th>Attempts</th>
+                      <th>Locked until</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {locked.map((a) => (
+                      <tr key={`${a.subject_type}-${a.subject_id}`}>
+                        <td>{a.subject_type}</td>
+                        <td>{a.display_name}</td>
+                        <td>{ROLE_PIN_LABELS[a.role] ?? a.role}</td>
+                        <td>{a.failed_attempts}</td>
+                        <td>
+                          {format(new Date(a.locked_until), "dd MMM yyyy HH:mm")}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={adminBusy}
+                            onClick={() => void handleUnlock(a)}
+                          >
+                            Unlock
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
       ) : null}
     </>
   );

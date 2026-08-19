@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { listRows, updateRow, type Row } from "@/lib/api";
+import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { settingsFormSchema, validateForm } from "@/lib/validation";
+import { PIN_LOGIN_ROLES, ROLE_PIN_LABELS } from "@/lib/rolePins";
+import type { OpaRole } from "@/types/database";
 import {
   PageHeader,
   TextInput,
+  TextSelect,
   StatCard,
   LoadingState,
   AlertBanner,
@@ -37,14 +41,20 @@ const empty: Settings = {
 };
 
 export default function SettingsPage() {
-  const { profile, can } = useAuth();
+  const { profile, can, role } = useAuth();
   const canEdit = can("settings", "edit");
+  const isSuperAdmin = role === "SUPER_ADMIN";
   const [form, setForm] = useState<Settings>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [shifts, setShifts] = useState<Row[]>([]);
+  const [pinRole, setPinRole] = useState<OpaRole>("FACTORY_MANAGER");
+  const [pinValue, setPinValue] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinMessage, setPinMessage] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +124,34 @@ export default function SettingsPage() {
     }
     setMessage("Settings saved.");
     setSaving(false);
+  }
+
+  async function handlePinRotate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isSuperAdmin) return;
+    setPinMessage(null);
+    setPinError(null);
+    if (!/^[0-9]{4}$/.test(pinValue)) {
+      setPinError("PIN must be exactly 4 digits.");
+      return;
+    }
+    const sb = getSupabase();
+    if (!sb) {
+      setPinError("Database is not configured.");
+      return;
+    }
+    setPinSaving(true);
+    const { error } = await sb.rpc("opa_set_role_pin", {
+      p_role: pinRole,
+      p_pin: pinValue,
+    });
+    setPinSaving(false);
+    if (error) {
+      setPinError(error.message);
+      return;
+    }
+    setPinMessage(`PIN updated for ${ROLE_PIN_LABELS[pinRole]}.`);
+    setPinValue("");
   }
 
   if (loading) return <LoadingState label="Loading settings…" />;
@@ -244,6 +282,46 @@ export default function SettingsPage() {
           <li>Secrets: configured on server</li>
         </ul>
       </section>
+
+      {isSuperAdmin ? (
+        <section className="panel page-card">
+          <h3>Role PIN management</h3>
+          <p>
+            Rotate 4-digit role PINs. Hashes are stored server-side only — the
+            new PIN is never saved in the browser after submit.
+          </p>
+          {pinMessage ? <AlertBanner tone="info" title={pinMessage} /> : null}
+          {pinError ? <AlertBanner tone="danger" title={pinError} /> : null}
+          <form className="form-grid" onSubmit={(e) => void handlePinRotate(e)}>
+            <TextSelect
+              label="Role"
+              value={pinRole}
+              onChange={(e) => setPinRole(e.target.value as OpaRole)}
+            >
+              {PIN_LOGIN_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_PIN_LABELS[r]}
+                </option>
+              ))}
+            </TextSelect>
+            <TextInput
+              label="New 4-digit PIN"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
+              value={pinValue}
+              onChange={(e) =>
+                setPinValue(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+            />
+            <div>
+              <button type="submit" className="btn btn-primary" disabled={pinSaving}>
+                {pinSaving ? "Updating…" : "Update role PIN"}
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
     </>
   );
 }

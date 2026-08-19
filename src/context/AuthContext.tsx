@@ -12,6 +12,7 @@ type AuthContextValue = {
   role: OpaRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithPin: (role: OpaRole, pin: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   can: (module: ModuleKey, action?: PermissionAction) => boolean;
 };
@@ -115,6 +116,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
+  const signInWithPin = useCallback(async (role: OpaRole, pin: string) => {
+    const sb = getSupabase();
+    if (!sb) {
+      return { error: "Database is not configured. Cannot sign in." };
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      return { error: "Enter a 4-digit PIN." };
+    }
+
+    const { data, error } = await sb.functions.invoke("pin-login", {
+      body: { role, pin },
+    });
+
+    if (error) {
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("failed to send") || msg.includes("fetch")) {
+        return { error: "PIN login service is unavailable. Try again or use Super Admin recovery." };
+      }
+      return { error: error.message || "PIN login failed." };
+    }
+
+    const payload = data as {
+      error?: string;
+      session?: { access_token: string; refresh_token: string };
+      user?: { id: string; email: string; full_name?: string; role?: string };
+    } | null;
+
+    if (!payload || payload.error || !payload.session?.access_token || !payload.session.refresh_token) {
+      return { error: payload?.error ?? "Invalid PIN." };
+    }
+
+    const { error: sessionError } = await sb.auth.setSession({
+      access_token: payload.session.access_token,
+      refresh_token: payload.session.refresh_token,
+    });
+    if (sessionError) return { error: sessionError.message };
+
+    const userId = payload.user?.id;
+    if (userId) {
+      const p = await fetchProfile(userId);
+      setProfile(p);
+    }
+
+    return { error: null };
+  }, []);
+
   const signOut = useCallback(async () => {
     const sb = getSupabase();
     if (profile) {
@@ -145,10 +192,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       loading,
       signIn,
+      signInWithPin,
       signOut,
       can,
     }),
-    [session, profile, role, loading, signIn, signOut, can],
+    [session, profile, role, loading, signIn, signInWithPin, signOut, can],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

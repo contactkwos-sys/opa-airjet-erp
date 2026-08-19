@@ -1,12 +1,13 @@
-{
-  "functions": [
-    {
-      "name": "whatsapp-notify",
-      "verify_jwt": true
-    },
-    {
-      "name": "ceo-decision",
-      "verify_jwt": false
-    }
-  ]
-}
+project_id = "rjpwznapyaegotbswlke"
+
+[functions.pin-login]
+verify_jwt = false
+
+[functions.whatsapp-notify]
+verify_jwt = false
+
+[functions.ceo-decision]
+verify_jwt = false
+
+[functions.ceo-visit-action]
+verify_jwt = false

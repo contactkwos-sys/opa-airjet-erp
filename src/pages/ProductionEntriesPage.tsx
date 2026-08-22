@@ -153,8 +153,8 @@ export default function ProductionEntriesPage() {
   return (
     <>
       <PageHeader
-        title="Production Entry"
-        subtitle="Shift-wise meter readings and efficiency capture."
+        title="Daily Production"
+        subtitle="Shift-wise production entry, efficiency and downtime reporting."
         actions={
           <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
             New entry

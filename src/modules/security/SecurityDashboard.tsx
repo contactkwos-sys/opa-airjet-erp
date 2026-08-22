@@ -27,7 +27,7 @@ export function SecurityDashboard({
           <h2>Security Dashboard</h2>
           <p className="subtitle">
             Gate, visitors, CEO meeting requests, vehicles and incidents — live
-            {isSupabaseConfigured ? " from Supabase" : " (local mode until Supabase is configured)"}.
+            {isSupabaseConfigured ? " from live database" : " — database not configured"}.
           </p>
         </div>
       </header>

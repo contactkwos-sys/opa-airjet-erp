@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import { listRows } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/env";
 import type {
   LoomStatus,
   OpaAlert,
@@ -12,36 +13,33 @@ import type {
   OpaProductionTarget,
 } from "@/types/database";
 import {
-  PageHeader,
   StatCard,
   StatusBadge,
   LoadingState,
-  AchievementIndicator,
-  efficiencyLevel,
   EmptyState,
   ErrorState,
 } from "@/components/ui";
-import { TrendChart, BarChartCard, PieChartCard } from "@/components/charts";
 
 type DashboardKpis = {
-  fleet: { total: number; running: number; stopped: number; breakdown: number };
-  production: { target: number; actual: number; efficiency: number; dobby: number; plain: number };
-  operations: {
-    breakdownToday: number;
-    maintenancePending: number;
-    lowStockItems: number;
-    purchasePending: number;
-    securityAlerts: number;
+  fleet: {
+    total: number;
+    running: number;
+    stopped: number;
+    breakdown: number;
+    maintenance: number;
+    idle: number;
   };
-  rejectionPct: number;
+  production: { target: number; actual: number; efficiency: number };
   downtimeHours: number;
-  costPerMeter: number;
-  inventoryValueLakh: number;
-  purchasePendingValue: number;
-  visitorsToday: number;
-  ceoMeetingsPending: number;
-  dispatchMeters: number;
-  receivablesLakh: number;
+  yarnStock: number;
+  beamStock: number;
+  greigeStock: number;
+  spareStock: number;
+  purchasePending: number;
+  grnPending: number;
+  maintenancePending: number;
+  securityVisitors: number;
+  managementAlerts: number;
 };
 
 function formatMeters(n: number) {
@@ -52,18 +50,11 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function LiveClock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-  return (
-    <div className="live-chip" aria-live="polite">
-      <span className="live-dot" aria-hidden />
-      Live · {format(now, "EEE, dd MMM · hh:mm:ss a")}
-    </div>
-  );
+function currentShift(): string {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 14) return "Shift A";
+  if (h >= 14 && h < 22) return "Shift B";
+  return "Shift C";
 }
 
 function countByStatus(looms: OpaLoom[]) {
@@ -85,117 +76,28 @@ function countByStatus(looms: OpaLoom[]) {
   return counts;
 }
 
-function emptyLiveKpis(fleetTotal: number): DashboardKpis {
+function emptyKpis(): DashboardKpis {
   return {
-    fleet: { total: fleetTotal, running: 0, stopped: 0, breakdown: 0 },
-    production: { target: 0, actual: 0, efficiency: 0, dobby: 0, plain: 0 },
-    operations: {
-      breakdownToday: 0,
-      maintenancePending: 0,
-      lowStockItems: 0,
-      purchasePending: 0,
-      securityAlerts: 0,
-    },
-    rejectionPct: 0,
+    fleet: { total: 0, running: 0, stopped: 0, breakdown: 0, maintenance: 0, idle: 0 },
+    production: { target: 0, actual: 0, efficiency: 0 },
     downtimeHours: 0,
-    costPerMeter: 0,
-    inventoryValueLakh: 0,
-    purchasePendingValue: 0,
-    visitorsToday: 0,
-    ceoMeetingsPending: 0,
-    dispatchMeters: 0,
-    receivablesLakh: 0,
+    yarnStock: 0,
+    beamStock: 0,
+    greigeStock: 0,
+    spareStock: 0,
+    purchasePending: 0,
+    grnPending: 0,
+    maintenancePending: 0,
+    securityVisitors: 0,
+    managementAlerts: 0,
   };
 }
 
-function buildLiveKpis(args: {
-  looms: OpaLoom[];
-  entries: OpaProductionEntry[];
-  targets: OpaProductionTarget[];
-  ops: {
-    maintenancePending: number;
-    lowStockItems: number;
-    purchasePending: number;
-    securityAlerts: number;
-    visitorsToday: number;
-    ceoMeetingsPending: number;
-    dispatchMeters: number;
-    receivablesLakh: number;
-    inventoryValueLakh: number;
-    purchasePendingValue: number;
-    rejectionPct: number;
-    costPerMeter: number;
-  };
-}): DashboardKpis {
-  const fleetCounts = countByStatus(args.looms);
-  const actual = args.entries.reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
-  const targetFromRows = args.targets.reduce((s, t) => s + Number(t.target_meter ?? 0), 0);
-  const target = targetFromRows > 0 ? targetFromRows : 0;
-  const effValues = args.entries
-    .map((e) => Number(e.efficiency))
-    .filter((n) => Number.isFinite(n) && n > 0);
-  const efficiency =
-    effValues.length > 0
-      ? Math.round((effValues.reduce((s, n) => s + n, 0) / effValues.length) * 10) / 10
-      : 0;
-  const downtimeHours =
-    Math.round(args.entries.reduce((s, e) => s + Number(e.downtime_hours ?? 0), 0) * 10) / 10;
-
-  const dobbyIds = new Set(args.looms.filter((l) => l.loom_type === "DOBBY").map((l) => l.id));
-  const plainIds = new Set(args.looms.filter((l) => l.loom_type === "PLAIN").map((l) => l.id));
-  const dobbyMeters = args.entries
-    .filter((e) => dobbyIds.has(e.loom_id))
-    .reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
-  const plainMeters = args.entries
-    .filter((e) => plainIds.has(e.loom_id))
-    .reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
-  const typeTotal = dobbyMeters + plainMeters;
-  const dobbyPct = typeTotal > 0 ? Math.round((dobbyMeters / typeTotal) * 1000) / 10 : 0;
-  const plainPct = typeTotal > 0 ? Math.round((plainMeters / typeTotal) * 1000) / 10 : 0;
-
-  return {
-    fleet: {
-      total: fleetCounts.total,
-      running: fleetCounts.running,
-      stopped: fleetCounts.stopped,
-      breakdown: fleetCounts.breakdown,
-    },
-    production: {
-      target: Math.round(target),
-      actual: Math.round(actual),
-      efficiency,
-      dobby: dobbyPct,
-      plain: plainPct,
-    },
-    operations: {
-      breakdownToday: fleetCounts.breakdown,
-      maintenancePending: args.ops.maintenancePending,
-      lowStockItems: args.ops.lowStockItems,
-      purchasePending: args.ops.purchasePending,
-      securityAlerts: args.ops.securityAlerts,
-    },
-    rejectionPct: args.ops.rejectionPct,
-    downtimeHours,
-    costPerMeter: args.ops.costPerMeter,
-    inventoryValueLakh: args.ops.inventoryValueLakh,
-    purchasePendingValue: args.ops.purchasePendingValue,
-    visitorsToday: args.ops.visitorsToday,
-    ceoMeetingsPending: args.ops.ceoMeetingsPending,
-    dispatchMeters: args.ops.dispatchMeters,
-    receivablesLakh: args.ops.receivablesLakh,
-  };
-}
-
-/** Count live rows; returns 0 on error / missing table (never demo). */
 async function countRows(
   table: string,
   filters?: Record<string, string | number | boolean | null>,
 ): Promise<number> {
-  const result = await listRows(table, {
-    select: "id",
-    filters,
-    limit: 500,
-  });
+  const result = await listRows(table, { select: "id", filters, limit: 500 });
   if (result.error) return 0;
   return result.data.length;
 }
@@ -205,26 +107,29 @@ async function sumColumn(
   column: string,
   filters?: Record<string, string | number | boolean | null>,
 ): Promise<number> {
-  const result = await listRows(table, {
-    select: column,
-    filters,
-    limit: 500,
-  });
+  const result = await listRows(table, { select: column, filters, limit: 500 });
   if (result.error) return 0;
   return result.data.reduce((s, row) => s + Number(row[column] ?? 0), 0);
 }
 
+type ActionItem = {
+  severity: "critical" | "warning" | "info";
+  label: string;
+  to: string;
+};
+
 export default function DashboardPage() {
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, role } = useAuth();
   const [looms, setLooms] = useState<OpaLoom[]>([]);
   const [alerts, setAlerts] = useState<OpaAlert[]>([]);
-  const [kpis, setKpis] = useState<DashboardKpis>(() => emptyLiveKpis(0));
+  const [recentEntries, setRecentEntries] = useState<OpaProductionEntry[]>([]);
+  const [kpis, setKpis] = useState<DashboardKpis>(emptyKpis);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const live = isSupabaseConfigured() && Boolean(session);
 
   useEffect(() => {
     if (authLoading) return;
-
     let cancelled = false;
 
     async function load() {
@@ -236,8 +141,8 @@ export default function DashboardPage() {
         if (!cancelled) {
           setLooms([]);
           setAlerts([]);
-          setKpis(emptyLiveKpis(0));
-          setError("No data available. Sign in with a configured database connection.");
+          setKpis(emptyKpis());
+          setError("No live production data available. Sign in with a configured database connection.");
           setLoading(false);
         }
         return;
@@ -257,11 +162,11 @@ export default function DashboardPage() {
             select: "*",
             orderBy: { column: "created_at", ascending: false },
             filters: { is_resolved: false },
-            limit: 8,
+            limit: 10,
           }),
           listRows("opa_production_entries", {
             select: "*",
-            orderBy: { column: "entry_date", ascending: false },
+            orderBy: { column: "created_at", ascending: false },
             filters: { entry_date: today },
             limit: 500,
           }),
@@ -284,89 +189,69 @@ export default function DashboardPage() {
 
         setLooms(liveLooms);
         setAlerts(liveAlerts);
+        setRecentEntries(liveEntries.slice(0, 5));
+
+        const fleet = countByStatus(liveLooms);
+        const actual = liveEntries.reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
+        const targetFromRows = liveTargets.reduce((s, t) => s + Number(t.target_meter ?? 0), 0);
+        const effValues = liveEntries
+          .map((e) => Number(e.efficiency))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        const efficiency =
+          effValues.length > 0
+            ? Math.round((effValues.reduce((s, n) => s + n, 0) / effValues.length) * 10) / 10
+            : targetFromRows > 0 && actual > 0
+              ? Math.round((actual / targetFromRows) * 1000) / 10
+              : 0;
+        const downtimeHours =
+          Math.round(liveEntries.reduce((s, e) => s + Number(e.downtime_hours ?? 0), 0) * 10) / 10;
 
         const [
           maintenancePending,
           purchasePending,
-          ceoMeetingsPending,
+          grnPending,
           visitorsToday,
-          inventoryRows,
-          purchaseValue,
-          dispatchQty,
-          receivableTotal,
-          rejectInspections,
-          passInspections,
+          yarnStock,
+          beamStock,
+          greigeStock,
+          spareStock,
         ] = await Promise.all([
           countRows("opa_maintenance_requests", { status: "OPEN" }),
           countRows("opa_purchase_orders", { payment_status: "PENDING" }),
-          countRows("ceo_visit_requests", { status: "PENDING" }),
+          countRows("opa_grns", { status: "PENDING" }),
           countRows("visitor_entries"),
-          listRows("opa_inventory_items", {
-            select: "current_qty,reorder_level,unit_cost",
-            filters: { is_active: true },
-            limit: 500,
-          }),
-          sumColumn("opa_purchase_orders", "total_amount", { payment_status: "PENDING" }),
-          sumColumn("opa_dispatch_items", "quantity"),
-          sumColumn("opa_sales_orders", "total_amount", { payment_status: "PENDING" }),
-          countRows("opa_quality_inspections", { result: "FAIL" }),
-          countRows("opa_quality_inspections", { result: "PASS" }),
+          sumColumn("opa_yarn_master", "current_stock_kg"),
+          countRows("opa_beams", { status: "AVAILABLE" }),
+          sumColumn("opa_greige_stock", "quantity_meter"),
+          countRows("opa_spare_parts"),
         ]);
 
         if (cancelled) return;
 
-        let lowStockItems = 0;
-        let inventoryValueLakh = 0;
-        if (!inventoryRows.error) {
-          for (const row of inventoryRows.data) {
-            const qty = Number(row.current_qty ?? 0);
-            const reorder = Number(row.reorder_level ?? 0);
-            const cost = Number(row.unit_cost ?? 0);
-            if (reorder > 0 && qty <= reorder) lowStockItems += 1;
-            inventoryValueLakh += (qty * cost) / 100_000;
-          }
-          inventoryValueLakh = Math.round(inventoryValueLakh * 10) / 10;
-        }
-
-        const qcTotal = rejectInspections + passInspections;
-        const rejectionPct =
-          qcTotal > 0 ? Math.round((rejectInspections / qcTotal) * 1000) / 10 : 0;
-        const actualMeters = liveEntries.reduce(
-          (s, e) => s + Number(e.production_meter ?? 0),
-          0,
-        );
-        const costPerMeter =
-          actualMeters > 0 && inventoryValueLakh > 0
-            ? Math.round(((inventoryValueLakh * 100_000) / actualMeters) * 10) / 10
-            : 0;
-
-        setKpis(
-          buildLiveKpis({
-            looms: liveLooms,
-            entries: liveEntries,
-            targets: liveTargets,
-            ops: {
-              maintenancePending,
-              lowStockItems,
-              purchasePending,
-              securityAlerts: liveAlerts.length,
-              visitorsToday,
-              ceoMeetingsPending,
-              dispatchMeters: Math.round(dispatchQty),
-              receivablesLakh: Math.round((receivableTotal / 100_000) * 10) / 10,
-              inventoryValueLakh,
-              purchasePendingValue: Math.round((purchaseValue / 100_000) * 10) / 10,
-              rejectionPct,
-              costPerMeter,
-            },
-          }),
-        );
+        setKpis({
+          fleet,
+          production: {
+            target: Math.round(targetFromRows),
+            actual: Math.round(actual),
+            efficiency,
+          },
+          downtimeHours,
+          yarnStock: Math.round(yarnStock),
+          beamStock,
+          greigeStock: Math.round(greigeStock),
+          spareStock,
+          purchasePending,
+          grnPending,
+          maintenancePending,
+          securityVisitors: visitorsToday,
+          managementAlerts: liveAlerts.length,
+        });
       } catch {
         if (!cancelled) {
           setLooms([]);
           setAlerts([]);
-          setKpis(emptyLiveKpis(0));
-          setError("Could not load dashboard data.");
+          setKpis(emptyKpis());
+          setError("Unable to load dashboard data.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -379,300 +264,231 @@ export default function DashboardPage() {
     };
   }, [authLoading, session]);
 
-  const fleetCounts = useMemo(() => countByStatus(looms), [looms]);
-  const k = kpis;
-  const fillPct =
-    k.production.target > 0
-      ? Math.min(100, (k.production.actual / k.production.target) * 100)
-      : 0;
-  const trend = useMemo(
-    () =>
-      ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name, i) => ({
-        name,
-        value: Math.round((k.production.actual || 0) * (0.82 + i * 0.025)),
-      })),
-    [k.production.actual],
-  );
-  const statusPie = useMemo(
-    () => [
-      { name: "Running", value: fleetCounts.running },
-      { name: "Stopped", value: fleetCounts.stopped },
-      { name: "Breakdown", value: fleetCounts.breakdown },
-      { name: "Other", value: fleetCounts.maintenance + fleetCounts.idle },
-    ],
-    [fleetCounts],
-  );
-  const shedBars = useMemo(() => {
-    const shedA = looms.filter((l) => (l.location ?? "").includes("A") || l.loom_type === "DOBBY");
-    const shedB = looms.filter((l) => !shedA.includes(l));
-    return [
-      {
-        name: "Shed A",
-        value: shedA.filter((l) => l.status === "RUNNING").length,
-      },
-      {
-        name: "Shed B",
-        value: shedB.filter((l) => l.status === "RUNNING").length,
-      },
-    ];
-  }, [looms]);
+  const actionItems = useMemo((): ActionItem[] => {
+    const items: ActionItem[] = [];
+    const breakdownLooms = looms.filter((l) => l.status === "BREAKDOWN");
+    for (const loom of breakdownLooms.slice(0, 2)) {
+      items.push({
+        severity: "critical",
+        label: `Loom ${loom.loom_number.replace(" LOOM ", " ")} Breakdown`,
+        to: `/looms/${loom.id}`,
+      });
+    }
+    if (kpis.spareStock > 0 && kpis.maintenancePending > 0) {
+      items.push({
+        severity: "warning",
+        label: "Spare Reorder Required",
+        to: "/spares",
+      });
+    }
+    if (kpis.purchasePending > 0) {
+      items.push({
+        severity: "warning",
+        label: "Purchase Approval Pending",
+        to: "/purchase-orders",
+      });
+    }
+    if (kpis.maintenancePending > 0) {
+      items.push({
+        severity: "info",
+        label: "Maintenance Pending",
+        to: "/maintenance/requests",
+      });
+    }
+    for (const alert of alerts.slice(0, 5 - items.length)) {
+      if (items.length >= 5) break;
+      items.push({
+        severity:
+          alert.severity === "CRITICAL" || alert.severity === "HIGH"
+            ? "critical"
+            : alert.severity === "MEDIUM"
+              ? "warning"
+              : "info",
+        label: alert.title,
+        to: "/alerts",
+      });
+    }
+    return items.slice(0, 5);
+  }, [looms, kpis, alerts]);
+
+  const plantRunning =
+    kpis.fleet.total > 0 && kpis.fleet.running > kpis.fleet.total * 0.5;
 
   if (authLoading || loading) {
-    return (
-      <>
-        <PageHeader title="Operations Dashboard" subtitle="Loading plant KPIs…" />
-        <LoadingState />
-      </>
-    );
+    return <LoadingState label="Loading plant data…" />;
   }
 
   return (
-    <>
-      <PageHeader
-        title="Operations Dashboard"
-        subtitle="Air jet loom fleet, production, and plant pulse at a glance."
-        meta={<LiveClock />}
-      />
+    <div className="dash-industrial">
+      <header className="dash-header">
+        <div>
+          <h1 className="dash-title">Plant Operations Dashboard</h1>
+          <p className="dash-meta">
+            {format(new Date(), "dd MMM yyyy")} · {currentShift()} ·{" "}
+            {role?.replace(/_/g, " ") ?? "—"}
+          </p>
+        </div>
+        <span className={`live-badge${live ? " live" : " offline"}`}>
+          <span className="live-dot" aria-hidden />
+          {live ? "LIVE" : "OFFLINE"}
+        </span>
+      </header>
 
       {error ? <ErrorState message={error} /> : null}
 
-      {!error && looms.length === 0 && k.fleet.total === 0 && k.production.actual === 0 ? (
+      {!error && looms.length === 0 && kpis.fleet.total === 0 ? (
         <EmptyState
-          title="No data available"
-          description="No loom or production records were returned for today."
+          title="No live production data available"
+          description="Connect to Supabase and ensure loom records exist for today."
         />
       ) : null}
 
-      <div className="section-head">
-        <h3>Loom Fleet</h3>
-        <span>
-          <Link to="/looms">View all looms</Link>
-        </span>
-      </div>
-      <div className="fleet-grid">
-        <StatCard
-          label="Total Looms"
-          value={fleetCounts.total || k.fleet.total}
-          hint="Installed capacity"
-          to="/looms"
-        />
-        <StatCard
-          label="Running"
-          value={fleetCounts.running}
-          tone="running"
-          hint={`${(((fleetCounts.running || 0) / (fleetCounts.total || 1)) * 100).toFixed(1)}% of fleet`}
-          to="/factory-floor"
-        />
-        <StatCard
-          label="Stopped"
-          value={fleetCounts.stopped}
-          tone="stopped"
-          hint="Idle / changeover"
-          to="/looms"
-        />
-        <StatCard
-          label="Breakdown"
-          value={fleetCounts.breakdown}
-          tone="breakdown"
-          hint="Needs attention"
-          to="/maintenance/requests"
-        />
-      </div>
-
-      <div className="kpi-row dash-kpi-extra">
-        <StatCard
-          label="Production today"
-          value={formatMeters(k.production.actual)}
-          hint={`Target ${formatMeters(k.production.target)}`}
-          to="/production"
-        />
-        <StatCard
-          label="Efficiency"
-          value={`${k.production.efficiency}%`}
-          tone="running"
-          to="/production"
-        />
-        <StatCard label="Rejection" value={`${k.rejectionPct}%`} tone="amber" to="/quality" />
-        <StatCard label="Downtime" value={`${k.downtimeHours} h`} tone="stopped" to="/stoppages" />
-        <StatCard label="Cost / meter" value={`₹${k.costPerMeter}`} to="/costing" />
-        <StatCard label="Inventory" value={`₹${k.inventoryValueLakh}L`} to="/inventory" />
-        <StatCard
-          label="Purchase pending"
-          value={`₹${k.purchasePendingValue}L`}
-          tone="amber"
-          to="/purchase-orders"
-        />
-        <StatCard
-          label="Visitors today"
-          value={k.visitorsToday}
-          tone="sky"
-          to="/security/visitors"
-        />
-        <StatCard label="CEO meetings" value={k.ceoMeetingsPending} to="/security/ceo-visits" />
-        <StatCard label="Dispatch" value={formatMeters(k.dispatchMeters)} to="/dispatch" />
-        <StatCard label="Receivables" value={`₹${k.receivablesLakh}L`} to="/receivables" />
-        <Link
-          to="/targets"
-          className="panel stat achievement-stat stat-clickable"
-          aria-label="Target attainment — open Targets"
-        >
-          <span className="label">Target attainment</span>
-          <AchievementIndicator
-            level={efficiencyLevel(fillPct)}
-            label={`${fillPct.toFixed(1)}% of daily target`}
-            value={`${k.production.efficiency}% eff`}
-          />
-        </Link>
-      </div>
-
-      <div className="production-layout">
-        <section className="panel prod-panel">
-          <div className="section-head">
-            <h3>Today Production</h3>
-            <span>Meters woven</span>
-          </div>
-          <div className="prod-metrics">
-            <div className="metric-block">
-              <span className="label">Target</span>
-              <div className="value">{formatMeters(k.production.target)}</div>
-            </div>
-            <div className="metric-block">
-              <span className="label">Actual</span>
-              <div className="value">{formatMeters(k.production.actual)}</div>
-            </div>
-            <div className="metric-block">
-              <span className="label">Efficiency</span>
-              <div className="value">{k.production.efficiency}%</div>
-            </div>
-          </div>
-          <div className="progress-wrap">
-            <div className="progress-meta">
-              <span>Target attainment</span>
-              <span>{fillPct.toFixed(1)}%</span>
-            </div>
-            <div
-              className="progress-track"
-              role="progressbar"
-              aria-valuenow={fillPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div className="progress-fill" style={{ ["--fill" as string]: `${fillPct}%` }} />
-            </div>
-          </div>
-          <div className="type-split">
-            <div className="type-card">
-              <div className="name">Dobby</div>
-              <div className="pct">{k.production.dobby}%</div>
-            </div>
-            <div className="type-card plain">
-              <div className="name">Plain</div>
-              <div className="pct">{k.production.plain}%</div>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel ops-panel">
-          <div className="section-head">
-            <h3>Operations Pulse</h3>
-            <span>Action queue</span>
-          </div>
-          <div className="ops-grid">
-            {[
-              ["crit", "BD", "Breakdown Today", k.operations.breakdownToday],
-              ["warn", "MT", "Maintenance Pending", k.operations.maintenancePending],
-              ["info", "ST", "Low Stock Items", k.operations.lowStockItems],
-              ["teal", "PO", "Purchase Pending", k.operations.purchasePending],
-              ["crit", "SA", "Security Alerts", k.operations.securityAlerts],
-            ].map(([tone, icon, title, count]) => (
-              <div className="op-row" key={String(title)}>
-                <div className="left">
-                  <span className={`op-icon ${tone}`}>{icon}</span>
-                  <span className="title">{title}</span>
-                </div>
-                <span className="count">{count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="chart-grid">
-        <TrendChart title="7-day production trend" data={trend} />
-        <BarChartCard title="Running looms by shed" data={shedBars} />
-        <PieChartCard title="Fleet status mix" data={statusPie} />
-      </div>
-
-      <section className="panel table-panel">
-        <div className="section-head">
-          <h3>Active Alerts</h3>
-          <span>
-            <Link to="/alerts">Open alerts</Link>
+      {/* Plant Status */}
+      <section className="panel plant-status-bar">
+        <div className="plant-status-main">
+          <span className={`plant-status-dot${plantRunning ? " running" : " stopped"}`} />
+          <strong>{plantRunning ? "RUNNING" : "ATTENTION"}</strong>
+          <span className="plant-status-looms">
+            {kpis.fleet.running} / {kpis.fleet.total || looms.length} Looms
           </span>
         </div>
-        {alerts.length === 0 ? (
-          <p className="table-empty">No unresolved alerts.</p>
+        <div className="plant-status-metrics">
+          <div>
+            <span className="label">Efficiency</span>
+            <strong>{kpis.production.efficiency}%</strong>
+          </div>
+          <div>
+            <span className="label">Production</span>
+            <strong>{formatMeters(kpis.production.actual)}</strong>
+          </div>
+          <div>
+            <span className="label">Alerts</span>
+            <strong>{kpis.managementAlerts}</strong>
+          </div>
+        </div>
+      </section>
+
+      {/* Fleet KPIs Row 1 */}
+      <div className="kpi-compact-grid">
+        <StatCard label="Total Looms" value={kpis.fleet.total} to="/looms" />
+        <StatCard label="Running" value={kpis.fleet.running} tone="running" to="/factory-floor" />
+        <StatCard label="Stopped" value={kpis.fleet.stopped} tone="stopped" to="/factory-floor" />
+        <StatCard label="Breakdown" value={kpis.fleet.breakdown} tone="breakdown" to="/factory-floor?status=BREAKDOWN" />
+        <StatCard label="Maintenance" value={kpis.fleet.maintenance} to="/maintenance/requests" />
+      </div>
+
+      {/* Production KPIs Row 2 */}
+      <div className="kpi-compact-grid">
+        <StatCard
+          label="Today's Production"
+          value={formatMeters(kpis.production.actual)}
+          to="/production"
+        />
+        <StatCard label="Target" value={formatMeters(kpis.production.target)} to="/targets" />
+        <StatCard
+          label="Achievement %"
+          value={
+            kpis.production.target > 0
+              ? `${Math.round((kpis.production.actual / kpis.production.target) * 1000) / 10}%`
+              : "—"
+          }
+          to="/targets"
+        />
+        <StatCard label="Efficiency %" value={`${kpis.production.efficiency}%`} tone="running" to="/production" />
+        <StatCard label="Downtime" value={`${kpis.downtimeHours} h`} tone="stopped" to="/stoppages" />
+      </div>
+
+      {/* Stock KPIs Row 3 */}
+      <div className="kpi-compact-grid">
+        <StatCard label="Yarn Stock" value={`${kpis.yarnStock} kg`} to="/yarn" />
+        <StatCard label="Beam Stock" value={kpis.beamStock} to="/beams" />
+        <StatCard label="Greige/Fabric" value={formatMeters(kpis.greigeStock)} to="/greige" />
+        <StatCard label="Spare Stock" value={kpis.spareStock} to="/spares" />
+      </div>
+
+      {/* Pending KPIs Row 4 */}
+      <div className="kpi-compact-grid">
+        <StatCard label="Purchase Pending" value={kpis.purchasePending} tone="amber" to="/purchase-orders" />
+        <StatCard label="GRN Pending" value={kpis.grnPending} tone="amber" to="/grn" />
+        <StatCard label="Maint. Pending" value={kpis.maintenancePending} tone="amber" to="/maintenance/requests" />
+        <StatCard label="Security Visitors" value={kpis.securityVisitors} to="/security/visitors" />
+        <StatCard label="Mgmt Alerts" value={kpis.managementAlerts} to="/alerts" />
+      </div>
+
+      {/* Action Required */}
+      {actionItems.length > 0 ? (
+        <section className="panel action-required">
+          <h3 className="section-title">Action Required</h3>
+          <ul className="action-list">
+            {actionItems.map((item) => (
+              <li key={item.label} className={`action-item ${item.severity}`}>
+                <Link to={item.to}>
+                  <span className={`action-dot ${item.severity}`} aria-hidden />
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* Quick Access */}
+      <section className="panel quick-access">
+        <h3 className="section-title">Quick Access</h3>
+        <div className="quick-links">
+          {[
+            ["Production", "/production"],
+            ["Factory Floor", "/factory-floor"],
+            ["Stores", "/inventory"],
+            ["Maintenance", "/maintenance/requests"],
+            ["Purchase", "/requisitions"],
+            ["Security", "/security"],
+          ].map(([label, to]) => (
+            <Link key={to} to={to} className="quick-link">
+              {label}
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Recent Activity */}
+      <section className="panel recent-activity">
+        <div className="section-head">
+          <h3 className="section-title">Recent Activity</h3>
+          <Link to="/audit">View all</Link>
+        </div>
+        {recentEntries.length === 0 && alerts.length === 0 ? (
+          <p className="muted">No recent activity recorded today.</p>
         ) : (
-          <ul className="alert-list">
-            {alerts.map((a) => (
+          <ul className="activity-list">
+            {recentEntries.map((e) => (
+              <li key={e.id}>
+                <span className="activity-time">
+                  {e.created_at
+                    ? format(new Date(e.created_at), "HH:mm")
+                    : "—"}
+                </span>
+                <span>Production Entry {e.entry_number}</span>
+              </li>
+            ))}
+            {alerts.slice(0, 3).map((a) => (
               <li key={a.id}>
-                <StatusBadge status={a.severity === "CRITICAL" || a.severity === "HIGH" ? "BREAKDOWN" : "STOPPED"}>
-                  {a.severity}
-                </StatusBadge>
-                <div>
-                  <strong>{a.title}</strong>
-                  {a.body ? <p>{a.body}</p> : null}
-                </div>
+                <span className="activity-time">
+                  {a.created_at
+                    ? format(new Date(a.created_at), "HH:mm")
+                    : "—"}
+                </span>
+                <StatusBadge
+                  status={
+                    (a.severity === "CRITICAL" ? "BREAKDOWN" : "STOPPED") as LoomStatus
+                  }
+                />
+                <span>{a.title}</span>
               </li>
             ))}
           </ul>
         )}
       </section>
-
-      <section className="panel table-panel">
-        <div className="section-head">
-          <h3>Loom Board Snapshot</h3>
-          <span>
-            <Link to="/factory-floor">Factory floor</Link>
-          </span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Loom</th>
-                <th>Location</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Article</th>
-              </tr>
-            </thead>
-            <tbody>
-              {looms.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <p className="table-empty">No active looms returned from Supabase.</p>
-                  </td>
-                </tr>
-              ) : (
-                looms.slice(0, 12).map((loom) => (
-                  <tr key={loom.id}>
-                    <td>
-                      <Link to={`/looms/${loom.id}`}>{loom.loom_number}</Link>
-                    </td>
-                    <td>{loom.location ?? "—"}</td>
-                    <td>{loom.loom_type}</td>
-                    <td>
-                      <StatusBadge status={loom.status as LoomStatus} />
-                    </td>
-                    <td>{loom.current_article ?? "—"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </>
+    </div>
   );
 }

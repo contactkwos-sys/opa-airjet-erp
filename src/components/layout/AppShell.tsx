@@ -1,30 +1,30 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import type { ModuleKey } from "@/lib/permissions";
-import { isPinAdmin } from "@/lib/adminTiers";
+import { isDeveloperOverride, isPinAdmin } from "@/lib/adminTiers";
 import { AppFooter } from "@/components/layout/AppFooter";
+import { TopBar } from "@/components/layout/TopBar";
 
 export type NavItem = { to: string; label: string; module: ModuleKey };
 export type NavGroup = { id: string; label: string; items: NavItem[] };
 
+const NAV_STORAGE_KEY = "opa_nav_collapsed_v2";
+
 export const NAV_GROUPS: NavGroup[] = [
   {
-    id: "executive",
-    label: "Executive",
-    items: [
-      { to: "/", label: "Dashboard", module: "dashboard" },
-      { to: "/daily-report", label: "Daily Report", module: "dashboard" },
-      { to: "/factory-floor", label: "Factory Floor", module: "production" },
-      { to: "/alerts", label: "Alerts", module: "dashboard" },
-    ],
+    id: "dashboard",
+    label: "Dashboard",
+    items: [{ to: "/", label: "Dashboard", module: "dashboard" }],
   },
   {
-    id: "production",
-    label: "Production",
+    id: "operations",
+    label: "Operations",
     items: [
       { to: "/looms", label: "Looms", module: "looms" },
+      { to: "/factory-floor", label: "Factory Floor", module: "production" },
       { to: "/production", label: "Production Entry", module: "production" },
+      { to: "/daily-report", label: "Daily Production", module: "dashboard" },
       { to: "/planning", label: "Planning", module: "production" },
       { to: "/targets", label: "Targets", module: "production" },
       { to: "/stoppages", label: "Stoppages", module: "production" },
@@ -32,13 +32,13 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "materials",
-    label: "Materials",
+    id: "stores",
+    label: "Stores",
     items: [
-      { to: "/yarn", label: "Yarn", module: "yarn" },
-      { to: "/beams", label: "Beams", module: "inventory" },
-      { to: "/greige", label: "Greige", module: "inventory" },
-      { to: "/inventory", label: "Inventory", module: "inventory" },
+      { to: "/yarn", label: "Yarn Store", module: "yarn" },
+      { to: "/beams", label: "Beam Store", module: "inventory" },
+      { to: "/greige", label: "Greige Store", module: "inventory" },
+      { to: "/inventory", label: "Finished Fabric", module: "inventory" },
       { to: "/spares", label: "Spares", module: "inventory" },
     ],
   },
@@ -46,83 +46,91 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "purchase",
     label: "Purchase",
     items: [
-      { to: "/requisitions", label: "Requisitions", module: "purchase" },
-      { to: "/purchase-orders", label: "PO", module: "purchase" },
+      { to: "/requisitions", label: "Purchase", module: "purchase" },
+      { to: "/suppliers", label: "Supplier", module: "purchase" },
       { to: "/grn", label: "GRN", module: "purchase" },
-      { to: "/suppliers", label: "Suppliers", module: "purchase" },
-    ],
-  },
-  {
-    id: "sales",
-    label: "Sales",
-    items: [
-      { to: "/customers", label: "Customers", module: "sales" },
-      { to: "/orders", label: "Orders", module: "sales" },
-      { to: "/dispatch", label: "Dispatch", module: "sales" },
+      { to: "/purchase-orders", label: "Purchase Pending", module: "purchase" },
     ],
   },
   {
     id: "maintenance",
     label: "Maintenance",
     items: [
-      { to: "/maintenance/requests", label: "Requests", module: "maintenance" },
-      { to: "/maintenance/work-orders", label: "Work Orders", module: "maintenance" },
-      { to: "/maintenance/pm", label: "PM", module: "maintenance" },
-    ],
-  },
-  {
-    id: "people",
-    label: "People",
-    items: [
-      { to: "/employees", label: "Employees", module: "hr" },
-      { to: "/attendance", label: "Attendance", module: "hr" },
-    ],
-  },
-  {
-    id: "finance",
-    label: "Finance",
-    items: [
-      { to: "/accounts", label: "Accounts", module: "accounts" },
-      { to: "/costing", label: "Costing", module: "costing" },
-      { to: "/receivables", label: "Receivables", module: "accounts" },
-      { to: "/payables", label: "Payables", module: "accounts" },
+      { to: "/maintenance/requests", label: "Breakdown", module: "maintenance" },
+      { to: "/maintenance/work-orders", label: "Maintenance", module: "maintenance" },
+      { to: "/maintenance/pm", label: "Preventive Maintenance", module: "maintenance" },
+      { to: "/spares", label: "Spare Requests", module: "inventory" },
     ],
   },
   {
     id: "security",
     label: "Security",
     items: [
-      { to: "/security", label: "Security Home", module: "security" },
+      { to: "/security", label: "Security Gate", module: "security" },
       { to: "/security/visitors", label: "Visitors", module: "security" },
-      { to: "/security/ceo-visits", label: "CEO Visits", module: "security" },
       { to: "/security/gate-pass", label: "Gate Pass", module: "security" },
-      { to: "/security/inside", label: "Inside Now", module: "security" },
-      { to: "/security/vehicles", label: "Vehicles", module: "security" },
-      { to: "/security/material-gate", label: "Material Gate", module: "security" },
-      { to: "/security/incidents", label: "Incidents", module: "security" },
-      { to: "/security/reports", label: "Security Reports", module: "security" },
+      { to: "/alerts", label: "Security Alerts", module: "dashboard" },
     ],
   },
   {
-    id: "system",
-    label: "System",
+    id: "reports",
+    label: "Reports",
     items: [
-      { to: "/reports", label: "Reports", module: "reports" },
-      { to: "/notifications", label: "Notifications", module: "notifications" },
-      { to: "/approvals", label: "Approvals", module: "approvals" },
-      { to: "/documents", label: "Documents", module: "documents" },
-      { to: "/search", label: "Search", module: "search" },
-      { to: "/settings", label: "Settings", module: "settings" },
-      { to: "/audit", label: "Audit", module: "audit" },
+      { to: "/reports", label: "Production Reports", module: "reports" },
+      { to: "/reports?type=efficiency", label: "Efficiency", module: "reports" },
+      { to: "/reports?type=downtime", label: "Downtime", module: "reports" },
+      { to: "/reports?type=quality", label: "Quality", module: "reports" },
+      { to: "/reports?type=stock", label: "Stock", module: "reports" },
+      { to: "/reports?type=maintenance", label: "Maintenance", module: "reports" },
+      { to: "/daily-report", label: "Management Reports", module: "dashboard" },
+    ],
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    items: [
+      { to: "/employees", label: "Users", module: "hr" },
+      { to: "/admin/employee-overview", label: "Roles", module: "settings" },
+      { to: "/admin/security-access", label: "Permissions", module: "settings" },
+      { to: "/settings", label: "System Settings", module: "settings" },
     ],
   },
 ];
 
+const SUPER_ADMIN_GROUP: NavGroup = {
+  id: "superadmin",
+  label: "Super Admin",
+  items: [
+    { to: "/admin/security-access", label: "Security", module: "settings" },
+    { to: "/audit", label: "Audit Log", module: "audit" },
+    { to: "/admin/security-access?tab=pin", label: "PIN Management", module: "settings" },
+  ],
+};
+
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(NAV_STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as Record<string, boolean>;
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
 export function AppShell() {
-  const { profile, signOut, can, role } = useAuth();
+  const { signOut, can, role } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
+
+  const persistCollapsed = useCallback((next: Record<string, boolean>) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(NAV_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const visibleGroups = useMemo(() => {
     const groups = NAV_GROUPS.map((group) => ({
@@ -130,29 +138,46 @@ export function AppShell() {
       items: group.items.filter((item) => can(item.module, "view")),
     })).filter((group) => group.items.length > 0);
 
-    // CEO / Director / Developer Override tools.
     if (isPinAdmin(role)) {
-      return groups.map((group) => {
-        if (group.id !== "system") return group;
-        const hasOverview = group.items.some(
+      const adminGroup = groups.find((g) => g.id === "admin");
+      if (adminGroup) {
+        const hasOverview = adminGroup.items.some(
           (i) => i.to === "/admin/employee-overview",
         );
-        if (hasOverview) return group;
-        return {
-          ...group,
-          items: [
-            ...group.items,
-            {
-              to: "/admin/employee-overview",
-              label: "Employee Links & Roles",
-              module: "settings" as ModuleKey,
-            },
-          ],
-        };
-      });
+        if (!hasOverview) {
+          adminGroup.items.push({
+            to: "/admin/employee-overview",
+            label: "Employee Links",
+            module: "settings" as ModuleKey,
+          });
+        }
+      }
     }
+
+    if (isDeveloperOverride(role)) {
+      const superItems = SUPER_ADMIN_GROUP.items.filter((item) =>
+        can(item.module, "view"),
+      );
+      if (superItems.length > 0) {
+        groups.push({ ...SUPER_ADMIN_GROUP, items: superItems });
+      }
+    }
+
     return groups;
   }, [can, role]);
+
+  useEffect(() => {
+    const activeGroup = visibleGroups.find((g) =>
+      g.items.some((item) => {
+        const path = window.location.pathname;
+        return item.to === "/" ? path === "/" : path.startsWith(item.to.split("?")[0]);
+      }),
+    );
+    if (activeGroup && collapsed[activeGroup.id]) {
+      persistCollapsed({ ...collapsed, [activeGroup.id]: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className={`app-shell${open ? " nav-open" : ""}`}>
@@ -161,33 +186,27 @@ export function AppShell() {
           <div className="brand-mark" aria-hidden>
             OPA
           </div>
-          <h1>OPA Group of India</h1>
-          <p>Air Jet Loom ERP</p>
+          <h1>OPA Air Jet ERP</h1>
+          <p>Plant: OPA Group of India</p>
         </div>
-
-        <button
-          type="button"
-          className="nav-toggle"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? "Hide menu" : "Show menu"}
-        </button>
 
         <nav className="nav nav-groups" aria-label="Primary">
           {visibleGroups.map((group) => {
-            const isCollapsed = collapsed[group.id];
+            const isCollapsed = collapsed[group.id] ?? group.id !== "dashboard";
             return (
               <div key={group.id} className="nav-group">
                 <button
                   type="button"
                   className="nav-group-label"
+                  aria-expanded={!isCollapsed}
                   onClick={() =>
-                    setCollapsed((c) => ({ ...c, [group.id]: !c[group.id] }))
+                    persistCollapsed({ ...collapsed, [group.id]: !isCollapsed })
                   }
                 >
                   <span>{group.label}</span>
-                  <span aria-hidden>{isCollapsed ? "+" : "−"}</span>
+                  <span className="nav-chevron" aria-hidden>
+                    {isCollapsed ? "›" : "‹"}
+                  </span>
                 </button>
                 {!isCollapsed ? (
                   <div className="nav-group-items">
@@ -212,10 +231,6 @@ export function AppShell() {
         </nav>
 
         <div className="sidebar-foot">
-          <div className="user-chip">
-            <strong>{profile?.full_name ?? "Guest"}</strong>
-            <span>{profile?.role?.replace(/_/g, " ") ?? "—"}</span>
-          </div>
           <button
             type="button"
             className="btn btn-ghost sidebar-signout"
@@ -226,20 +241,27 @@ export function AppShell() {
           >
             Sign out
           </button>
-          <p className="foot-note">
-            Plant control room · Shed A &amp; B
-            <br />
-            72 air-jet looms
-          </p>
         </div>
       </aside>
 
-      <main className="main">
-        <div className="main-content">
-          <Outlet />
-        </div>
-        <AppFooter />
-      </main>
+      {open ? (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Close menu"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
+
+      <div className="main-column">
+        <TopBar onMenuToggle={() => setOpen((v) => !v)} menuOpen={open} />
+        <main className="main">
+          <div className="main-content">
+            <Outlet />
+          </div>
+          <AppFooter />
+        </main>
+      </div>
     </div>
   );
 }

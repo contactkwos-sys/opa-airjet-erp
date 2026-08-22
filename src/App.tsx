@@ -47,6 +47,8 @@ import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
 import EmployeeRoleOverviewPage from "@/pages/system/EmployeeRoleOverviewPage";
 import AuditPage from "@/pages/system/AuditPage";
+import SecurityAccessPage from "@/pages/system/SecurityAccessPage";
+import { ModuleRoute } from "@/components/layout/ModuleGuard";
 
 /* Existing Security module — do not remove */
 import { SecurityDashboard } from "@/modules/security/SecurityDashboard";
@@ -190,8 +192,9 @@ export default function App() {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="admin/employee-overview" element={<EmployeeRoleOverviewPage />} />
-        <Route path="audit" element={<AuditPage />} />
+        <Route path="admin/employee-overview" element={<ModuleRoute module="settings"><EmployeeRoleOverviewPage /></ModuleRoute>} />
+        <Route path="admin/security-access" element={<ModuleRoute module="settings"><SecurityAccessPage /></ModuleRoute>} />
+        <Route path="audit" element={<ModuleRoute module="audit"><AuditPage /></ModuleRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

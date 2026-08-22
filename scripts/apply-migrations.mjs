@@ -24,6 +24,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const MIGRATIONS_DIR = path.join(ROOT, "supabase", "migrations");
 const WRONG_REF = "ixulyhomqtajenigopai";
+const DEFAULT_PROJECT_REF = (
+  process.env.OPA_SUPABASE_PROJECT_REF ||
+  process.env.SUPABASE_PROJECT_REF ||
+  "rjpwznapyaegotbswlke"
+).trim();
 
 function maskSecret(value) {
   if (!value) return "(empty)";
@@ -48,11 +53,11 @@ function resolveProjectRef() {
   const fromEnv = (process.env.SUPABASE_PROJECT_REF ?? "").trim();
   if (fromEnv) return fromEnv;
   const url = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").trim();
-  if (!url) return "";
+  if (!url) return DEFAULT_PROJECT_REF;
   try {
-    return new URL(url).hostname.split(".")[0] || "";
+    return new URL(url).hostname.split(".")[0] || DEFAULT_PROJECT_REF;
   } catch {
-    return "";
+    return DEFAULT_PROJECT_REF;
   }
 }
 
@@ -134,6 +139,7 @@ async function applyViaManagementApi(token, projectRef, files) {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
+        "User-Agent": "opa-airjet-erp-db-migrate/1.0",
       },
       body: JSON.stringify({ query: sql }),
     });
@@ -153,7 +159,11 @@ async function applyViaManagementApi(token, projectRef, files) {
 }
 
 async function main() {
-  const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
+  const databaseUrl = (
+    process.env.OPA_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    ""
+  ).trim();
   const accessToken = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
   const forceApply = process.argv.includes("--force-apply");
   const dryRun =
@@ -167,7 +177,7 @@ async function main() {
 
   if (projectRef === WRONG_REF) {
     fail(
-      `Refusing project ${WRONG_REF}. That is NOT opa-airjet-erp. Set VITE_SUPABASE_URL / SUPABASE_PROJECT_REF to the new project.`,
+      `Refusing project ${WRONG_REF}. That is NOT opa-airjet-erp. Set VITE_SUPABASE_URL / SUPABASE_PROJECT_REF to the correct project (rjpwznapyaegotbswlke).`,
       2,
     );
   }

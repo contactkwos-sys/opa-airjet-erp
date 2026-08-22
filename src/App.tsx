@@ -3,9 +3,9 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { LoadingState } from "@/components/ui";
-import { isSupabaseConfigured as isErpSupabaseConfigured } from "@/lib/env";
 
 import LoginPage from "@/pages/LoginPage";
+import DeveloperOverrideLoginPage from "@/pages/DeveloperOverrideLoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoomsPage from "@/pages/LoomsPage";
 import LoomDetailPage from "@/pages/LoomDetailPage";
@@ -45,7 +45,10 @@ import ApprovalsPage from "@/pages/system/ApprovalsPage";
 import DocumentsPage from "@/pages/system/DocumentsPage";
 import SearchPage from "@/pages/system/SearchPage";
 import SettingsPage from "@/pages/system/SettingsPage";
+import EmployeeRoleOverviewPage from "@/pages/system/EmployeeRoleOverviewPage";
 import AuditPage from "@/pages/system/AuditPage";
+import SecurityAccessPage from "@/pages/system/SecurityAccessPage";
+import { ModuleRoute } from "@/components/layout/ModuleGuard";
 
 /* Existing Security module — do not remove */
 import { SecurityDashboard } from "@/modules/security/SecurityDashboard";
@@ -101,9 +104,9 @@ function SecurityNav({
 }
 
 function Protected({ children }: { children: ReactNode }) {
-  const { session, loading, demoMode } = useAuth();
+  const { session, loading } = useAuth();
   if (loading) return <LoadingState label="Starting OPA ERP…" />;
-  if (!session && isErpSupabaseConfigured() && !demoMode) {
+  if (!session) {
     return <Navigate to="/login" replace />;
   }
   return children;
@@ -113,6 +116,11 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Legacy Company Admin URLs → unified /login (CEO & Director are roles there). */}
+      <Route path="/super-login" element={<Navigate to="/login" replace />} />
+      <Route path="/admin" element={<Navigate to="/login" replace />} />
+      <Route path="/kwos-override" element={<DeveloperOverrideLoginPage />} />
+      <Route path="/dev-console" element={<DeveloperOverrideLoginPage />} />
       <Route path="/security/login" element={<SecurityLoginPage />} />
       <Route path="/ceo/visit/:token" element={<CeoVisitMobilePage />} />
       <Route path="/ceo/approve/:token" element={<CeoApprovalPage />} />
@@ -184,7 +192,9 @@ export default function App() {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="audit" element={<AuditPage />} />
+        <Route path="admin/employee-overview" element={<ModuleRoute module="settings"><EmployeeRoleOverviewPage /></ModuleRoute>} />
+        <Route path="admin/security-access" element={<ModuleRoute module="settings"><SecurityAccessPage /></ModuleRoute>} />
+        <Route path="audit" element={<ModuleRoute module="audit"><AuditPage /></ModuleRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

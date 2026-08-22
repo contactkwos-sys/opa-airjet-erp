@@ -13,7 +13,18 @@ npm run supabase:test
 npm run dev
 ```
 
-Without Supabase credentials the app runs in **Demo Mode** (ERP) / **local store** (Security).
+Without Supabase credentials the app shows a configuration warning on the login screen and does not fabricate demo data.
+
+## Login
+
+- **Single login (`/login`):** pick Role (CEO, Director, Plant Manager, Production Manager, or Security) → pick Name (hidden when only one person) → enter personal 4-digit PIN. Validated by the `pin-login` Edge Function against bcrypt hashes — never checked in the frontend.
+- **CEO / Director:** same `/login` page. After sign-in they can manage employees & PINs, view PIN history, unlock accounts, and copy **Employee Links** (personal `/login?role=…&e=…` URLs) to send via WhatsApp/SMS from phone or desktop. Default PINs: **CEO `3501`**, **Director `3502`** (not 3051).
+- **Employee deep links:** CEO/Director generate a unique shareable login link per employee (optionally with a one-time PIN) from **Employee & Roles**. Opening the link pre-selects that employee on `/login`.
+- **Developer Override (hidden):** `/kwos-override` (alias `/dev-console`) — separate developer-only PIN for emergency reset, full ERP, and email recovery. Unchanged and separate from CEO/Director.
+- **Admin tools:** Settings → Role PIN Management / history / locked accounts; `/admin/employee-overview` after CEO, Director, or Developer sign-in. Emergency Reset appears for Developer Override only.
+- Legacy `/super-login` and `/admin` redirect to `/login`.
+
+Apply migrations through `202608200400_ceo_pin_login_hardening.sql`, then deploy `supabase/functions/pin-login`.
 
 ## Environment
 

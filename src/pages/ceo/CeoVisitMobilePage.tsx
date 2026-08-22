@@ -22,22 +22,12 @@ export default function CeoVisitMobilePage() {
       const sb = getSupabase();
       if (!sb || !token) {
         if (!cancelled) {
-          setRequest({
-            id: "demo",
-            request_number: "CEO-DEMO-001",
-            visitor_name: "Demo Visitor",
-            visitor_mobile: "9876543210",
-            visitor_company: "Partner Mills",
-            purpose: "Plant walkthrough with production head",
-            proposed_visit_at: new Date(Date.now() + 86400000).toISOString(),
-            status: "PENDING",
-            action_token: token ?? "demo",
-            action_token_expires_at: null,
-            ceo_notes: null,
-            approved_visit_at: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+          setRequest(null);
+          setError(
+            !token
+              ? "This visit link is invalid."
+              : "Database is not configured. No data available.",
+          );
           setLoading(false);
         }
         return;
@@ -70,25 +60,8 @@ export default function CeoVisitMobilePage() {
     setBusy(true);
     setError(null);
     const sb = getSupabase();
-    if (!sb || request.id === "demo") {
-      setMessage(
-        action === "approve"
-          ? "Visit approved (demo)."
-          : action === "reject"
-            ? "Visit rejected (demo)."
-            : "Reschedule requested (demo).",
-      );
-      setRequest({
-        ...request,
-        status:
-          action === "approve"
-            ? "APPROVED"
-            : action === "reject"
-              ? "REJECTED"
-              : "RESCHEDULED",
-        ceo_notes: notes || request.ceo_notes,
-        approved_visit_at: action === "approve" ? visitAt || request.proposed_visit_at : null,
-      });
+    if (!sb) {
+      setError("Database is not configured. Cannot update visit.");
       setBusy(false);
       return;
     }

@@ -17,10 +17,6 @@ const fields = [
     { name: 'amount', label: 'Amount', type: 'number', required: true },
 ];
 
-const demoRows: Row[] = [
-  { id: 'demo-1', payment_number: 'Sample', payment_date: new Date().toISOString().slice(0, 10), amount: 0, status: 'Sample' },
-];
-
 export default function Page() {
   return (
     <ModulePage
@@ -30,7 +26,6 @@ export default function Page() {
       moduleKey="accounts"
       columns={columns}
       fields={fields}
-      demoRows={demoRows}
     />
   );
 }

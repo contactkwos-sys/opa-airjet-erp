@@ -23,7 +23,7 @@ export function getSupabase(): SupabaseClient | null {
   return client;
 }
 
-/** Shared client — null when not configured (Demo / local Security mode). */
+/** Shared client — null when Supabase is not configured. */
 export const supabase: SupabaseClient | null = getSupabase();
 
 export function requireSupabase(): SupabaseClient {

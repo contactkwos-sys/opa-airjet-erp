@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { writeAuditLog } from "@/lib/audit";
-import { buildDemoLooms, buildDemoProductionEntries } from "@/lib/demoData";
+import { listRows, toUserError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { OpaLoom, OpaProductionEntry } from "@/types/database";
 import {
@@ -45,41 +45,24 @@ export default function ProductionEntriesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const demoLooms = buildDemoLooms();
-    const sb = getSupabase();
-    if (!sb) {
-      setLooms(demoLooms);
-      setEntries(buildDemoProductionEntries(demoLooms));
-      setForm((f) => ({ ...f, loom_id: demoLooms[0]?.id ?? "" }));
-      setLoading(false);
-      return;
-    }
-    try {
-      const [loomRes, entryRes] = await Promise.all([
-        sb.from("opa_looms").select("*").order("loom_number"),
-        sb
-          .from("opa_production_entries")
-          .select("*")
-          .order("entry_date", { ascending: false })
-          .limit(100),
-      ]);
-      const loadedLooms =
-        loomRes.data?.length ? (loomRes.data as OpaLoom[]) : demoLooms;
-      setLooms(loadedLooms);
-      if (entryRes.error) throw entryRes.error;
-      if (entryRes.data?.length) {
-        setEntries(entryRes.data as OpaProductionEntry[]);
-      } else {
-        setEntries(buildDemoProductionEntries(loadedLooms));
-      }
-      setForm((f) => ({ ...f, loom_id: loadedLooms[0]?.id ?? "" }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-      setLooms(demoLooms);
-      setEntries(buildDemoProductionEntries(demoLooms));
-    } finally {
-      setLoading(false);
-    }
+    const [loomRes, entryRes] = await Promise.all([
+      listRows("opa_looms", {
+        orderBy: { column: "loom_number", ascending: true },
+        limit: 200,
+      }),
+      listRows("opa_production_entries", {
+        orderBy: { column: "entry_date", ascending: false },
+        limit: 100,
+      }),
+    ]);
+
+    const loadedLooms = loomRes.data as unknown as OpaLoom[];
+    setLooms(loadedLooms);
+    setEntries(entryRes.data as unknown as OpaProductionEntry[]);
+    setForm((f) => ({ ...f, loom_id: loadedLooms[0]?.id ?? "" }));
+    const hardError = [loomRes, entryRes].find((r) => r.error);
+    setError(hardError?.error ?? null);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -87,11 +70,11 @@ export default function ProductionEntriesPage() {
   }, [load]);
 
   const totals = useMemo(() => {
-    const meters = entries.reduce((s, e) => s + (e.production_meter ?? 0), 0);
+    const meters = entries.reduce((s, e) => s + Number(e.production_meter ?? 0), 0);
     const eff =
       entries.length === 0
         ? 0
-        : entries.reduce((s, e) => s + (e.efficiency ?? 0), 0) / entries.length;
+        : entries.reduce((s, e) => s + Number(e.efficiency ?? 0), 0) / entries.length;
     return { meters, eff };
   }, [entries]);
 
@@ -101,12 +84,14 @@ export default function ProductionEntriesPage() {
     {
       key: "loom",
       header: "Loom",
-      render: (r) => loomMap.get(r.loom_id)?.loom_number ?? r.loom_id.slice(0, 8),
+      render: (r) =>
+        loomMap.get(r.loom_id)?.loom_number ??
+        (r.loom_id ? String(r.loom_id).slice(0, 8) : "—"),
     },
     {
       key: "production_meter",
       header: "Production (M)",
-      render: (r) => r.production_meter.toLocaleString("en-IN"),
+      render: (r) => Number(r.production_meter ?? 0).toLocaleString("en-IN"),
     },
     {
       key: "efficiency",
@@ -121,6 +106,11 @@ export default function ProductionEntriesPage() {
     setSaving(true);
     const opening = Number(form.opening_meter);
     const closing = Number(form.closing_meter);
+    if (closing < opening) {
+      setError("Closing meter must be greater than or equal to opening meter.");
+      setSaving(false);
+      return;
+    }
     const payload = {
       entry_number: form.entry_number,
       entry_date: form.entry_date,
@@ -132,24 +122,7 @@ export default function ProductionEntriesPage() {
     };
     const sb = getSupabase();
     if (!sb) {
-      setEntries((prev) => [
-        {
-          id: crypto.randomUUID(),
-          ...payload,
-          shift_id: null,
-          article_id: null,
-          production_meter: closing - opening,
-          production_kg: null,
-          running_hours: null,
-          downtime_hours: null,
-          operator_id: null,
-          supervisor_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
-      setOpen(false);
+      setError("Database is not configured. Cannot save.");
       setSaving(false);
       return;
     }
@@ -171,7 +144,7 @@ export default function ProductionEntriesPage() {
       setOpen(false);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setError(toUserError(err, "Could not save production entry"));
     } finally {
       setSaving(false);
     }
@@ -180,8 +153,8 @@ export default function ProductionEntriesPage() {
   return (
     <>
       <PageHeader
-        title="Production Entry"
-        subtitle="Shift-wise meter readings and efficiency capture."
+        title="Daily Production"
+        subtitle="Shift-wise production entry, efficiency and downtime reporting."
         actions={
           <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
             New entry
@@ -198,13 +171,14 @@ export default function ProductionEntriesPage() {
       <section className="panel table-panel">
         {loading ? <LoadingState /> : null}
         {!loading && error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
-        {!loading && entries.length === 0 ? (
+        {!loading && !error && entries.length === 0 ? (
           <EmptyState
-            title="No production entries"
+            title="No data available"
+            description="No production entries found."
             action={{ label: "New entry", onClick: () => setOpen(true) }}
           />
         ) : null}
-        {!loading && entries.length > 0 ? (
+        {!loading && !error && entries.length > 0 ? (
           <DataTable columns={columns} rows={entries} rowKey={(r) => r.id} pageSize={15} />
         ) : null}
       </section>

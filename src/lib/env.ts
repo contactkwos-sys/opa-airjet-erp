@@ -1,4 +1,4 @@
-/** Reads Vite-exposed Supabase env. Empty key → Demo Mode (no remote auth). */
+/** Reads Vite-exposed Supabase env. */
 
 function trim(value: string | undefined): string {
   return (value ?? "").trim();

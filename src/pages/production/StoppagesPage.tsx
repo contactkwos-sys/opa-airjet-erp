@@ -13,7 +13,7 @@ const columns: Column<Row>[] = [
 ];
 
 const fields = [
-  { name: 'loom_id', label: 'Loom ID', type: 'text', required: true, placeholder: 'demo-loom-13' },
+  { name: 'loom_id', label: 'Loom ID', type: 'text', required: true, placeholder: 'Loom UUID' },
   { name: 'reason', label: 'Reason', type: 'select', required: true, options: [{ value: 'WARP_BREAK', label: 'WARP BREAK' }, { value: 'WEFT_BREAK', label: 'WEFT BREAK' }, { value: 'BEAM_CHANGE', label: 'BEAM CHANGE' }, { value: 'BREAKDOWN', label: 'BREAKDOWN' }, { value: 'POWER_FAILURE', label: 'POWER FAILURE' }, { value: 'PLANNED_MAINTENANCE', label: 'PLANNED MAINTENANCE' }, { value: 'OTHER', label: 'OTHER' }] },
   { name: 'start_time', label: 'Start time', type: 'datetime-local', required: true },
   { name: 'department', label: 'Department', type: 'text' },

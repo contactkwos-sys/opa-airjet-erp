@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 /**
- * Apply opa_* SQL migrations in lexicographic order.
+ * Optional migration applier for the CORRECT opa-airjet-erp project only.
  *
- * Auth (one of):
- *   DATABASE_URL            — direct Postgres connection (uses `pg`)
- *   SUPABASE_ACCESS_TOKEN   — Management API query endpoint
+ * Prefer: paste supabase/sql_editor/01_OPA_AIRJET_ERP_FULL_MIGRATION.sql
+ * into the Supabase SQL Editor of project "OPA AIR JET ERP".
  *
- * Never prints connection passwords or tokens.
+ * This script REFUSES the wrong shared project ixulyhomqtajenigopai.
+ * It will not invent IPv6 workarounds or use unsafe connections.
+ *
+ * Auth (only if you intentionally apply from CI against the CORRECT project):
+ *   SUPABASE_PROJECT_REF   — project ref from URL host (required)
+ *   DATABASE_URL           — supported pooler URI for that project, OR
+ *   SUPABASE_ACCESS_TOKEN  — Management API token
+ *
+ * Default without --force-apply: plan/preflight only (no SQL executed).
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -16,12 +23,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const MIGRATIONS_DIR = path.join(ROOT, "supabase", "migrations");
-const PROJECT_REF = (
+const WRONG_REF = "ixulyhomqtajenigopai";
+const DEFAULT_PROJECT_REF = (
   process.env.OPA_SUPABASE_PROJECT_REF ||
   process.env.SUPABASE_PROJECT_REF ||
   "rjpwznapyaegotbswlke"
 ).trim();
-const MANAGEMENT_QUERY_URL = `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`;
 
 function maskSecret(value) {
   if (!value) return "(empty)";
@@ -42,6 +49,18 @@ function fail(msg, code = 1) {
   process.exit(code);
 }
 
+function resolveProjectRef() {
+  const fromEnv = (process.env.SUPABASE_PROJECT_REF ?? "").trim();
+  if (fromEnv) return fromEnv;
+  const url = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").trim();
+  if (!url) return DEFAULT_PROJECT_REF;
+  try {
+    return new URL(url).hostname.split(".")[0] || DEFAULT_PROJECT_REF;
+  } catch {
+    return DEFAULT_PROJECT_REF;
+  }
+}
+
 async function listMigrationFiles() {
   const entries = await readdir(MIGRATIONS_DIR);
   return entries
@@ -49,11 +68,25 @@ async function listMigrationFiles() {
     .sort((a, b) => a.localeCompare(b));
 }
 
+async function assertNonDestructive(files) {
+  const forbidden = [/\bDROP\s+TABLE\b/i, /\bTRUNCATE\b/i, /\bDROP\s+SCHEMA\b/i];
+  for (const file of files) {
+    const sql = await readFile(path.join(MIGRATIONS_DIR, file), "utf8");
+    for (const re of forbidden) {
+      if (re.test(sql)) {
+        fail(
+          `${file} looks destructive (${re}). Refusing to apply. Run npm run db:plan.`,
+        );
+      }
+    }
+  }
+  log("Preflight OK — no DROP TABLE / TRUNCATE / DROP SCHEMA detected");
+}
+
 async function applyViaPg(databaseUrl, files) {
   const { default: pg } = await import("pg");
   const { Client } = pg;
 
-  // Redact password from logged URL
   let safeUrl = databaseUrl;
   try {
     const u = new URL(databaseUrl);
@@ -78,7 +111,6 @@ async function applyViaPg(databaseUrl, files) {
         log(`OK ${file}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Idempotent migrations: treat "already exists" as success
         if (/already exists|duplicate/i.test(message)) {
           warn(`${file}: ${message} — continuing (idempotent)`);
           continue;
@@ -91,9 +123,10 @@ async function applyViaPg(databaseUrl, files) {
   }
 }
 
-async function applyViaManagementApi(token, files) {
+async function applyViaManagementApi(token, projectRef, files) {
+  const managementUrl = `https://api.supabase.com/v1/projects/${projectRef}/database/query`;
   log(
-    `Using SUPABASE_ACCESS_TOKEN → ${maskSecret(token)} against project ${PROJECT_REF}`,
+    `Using SUPABASE_ACCESS_TOKEN → ${maskSecret(token)} against project ${projectRef}`,
   );
 
   for (const file of files) {
@@ -101,7 +134,7 @@ async function applyViaManagementApi(token, files) {
     const sql = await readFile(full, "utf8");
     log(`POSTing ${file} (${sql.length} chars)…`);
 
-    const res = await fetch(MANAGEMENT_QUERY_URL, {
+    const res = await fetch(managementUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -132,10 +165,20 @@ async function main() {
     ""
   ).trim();
   const accessToken = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
+  const forceApply = process.argv.includes("--force-apply");
+  const dryRun =
+    !forceApply ||
+    process.argv.includes("--plan") ||
+    process.argv.includes("--dry-run");
 
-  if (!databaseUrl && !accessToken) {
+  const projectRef = resolveProjectRef();
+  log(`Target project ref: ${projectRef || "(unset)"}`);
+  log(`Wrong project (blocked): ${WRONG_REF}`);
+
+  if (projectRef === WRONG_REF) {
     fail(
-      "Set OPA_DATABASE_URL / DATABASE_URL or SUPABASE_ACCESS_TOKEN before running db:migrate",
+      `Refusing project ${WRONG_REF}. That is NOT opa-airjet-erp. Set VITE_SUPABASE_URL / SUPABASE_PROJECT_REF to the correct project (rjpwznapyaegotbswlke).`,
+      2,
     );
   }
 
@@ -144,11 +187,29 @@ async function main() {
     fail(`No .sql files found in ${MIGRATIONS_DIR}`);
   }
   log(`Found ${files.length} migration(s): ${files.join(", ")}`);
+  await assertNonDestructive(files);
+
+  if (dryRun) {
+    log("Dry-run / default mode — no SQL executed.");
+    log("Paste supabase/sql_editor/01_OPA_AIRJET_ERP_FULL_MIGRATION.sql into the CORRECT project's SQL Editor.");
+    log("To apply from CI against the CORRECT project only: pass --force-apply with SUPABASE_PROJECT_REF set.");
+    return;
+  }
+
+  if (!projectRef) {
+    fail("Set SUPABASE_PROJECT_REF (or VITE_SUPABASE_URL) for the CORRECT opa-airjet-erp project");
+  }
+
+  if (!databaseUrl && !accessToken) {
+    fail(
+      "Set DATABASE_URL (supported pooler for CORRECT project) or SUPABASE_ACCESS_TOKEN before --force-apply",
+    );
+  }
 
   if (databaseUrl) {
     await applyViaPg(databaseUrl, files);
   } else {
-    await applyViaManagementApi(accessToken, files);
+    await applyViaManagementApi(accessToken, projectRef, files);
   }
 
   log("All migrations applied (or already present).");

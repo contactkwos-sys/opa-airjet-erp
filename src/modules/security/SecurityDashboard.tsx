@@ -35,7 +35,7 @@ export function SecurityDashboard({
       {!isSupabaseConfigured && (
         <div className="banner warn">
           Supabase env vars are not set. Data is stored locally in this browser so workflows can be tested.
-          Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> for production.
+          Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> for production.
         </div>
       )}
 

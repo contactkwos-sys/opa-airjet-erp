@@ -63,11 +63,11 @@ Apply with: `npm run db:migrate` (needs `DATABASE_URL` or `SUPABASE_ACCESS_TOKEN
 
 ## 10. Environment variables
 
-Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_BASE_URL`  
+Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (preferred; `VITE_SUPABASE_ANON_KEY` alias), `VITE_APP_BASE_URL`  
 Server: `SUPABASE_SERVICE_ROLE_KEY`, `WHATSAPP_*`, `CEO_WHATSAPP_NUMBER`, `CEO_APPROVAL_TOKEN_SECRET`, `APP_BASE_URL`  
 Migrations: `DATABASE_URL` or `SUPABASE_ACCESS_TOKEN`
 
-**Never place service role / WhatsApp tokens in frontend.**
+**Never place service role / WhatsApp tokens / DB password in frontend.**
 
 ## 11. WhatsApp configuration
 
@@ -83,15 +83,17 @@ Documented in `docs/SECURITY_MODULE.md`. If secrets missing, requests save with 
 |-------|--------|
 | `npm run build` | PASS |
 | `npm run test:security` | PASS (`SECURITY SMOKE OK`) |
+| `npm run supabase:test` | PASS (Auth health + login endpoint + REST with publishable key) |
+| `npm run db:plan` | PASS (non-destructive) |
 | Live Supabase `opa_*` apply | **BLOCKED** — DB host IPv6-only / pooler tenant not reachable from this agent; secrets for Management API not provided |
 | Empty / error states | No fabricated fallback data |
 | Security local-store mode | Available without Supabase |
 
 ## 14. Errors / blockers
 
-1. Cannot apply SQL from this environment (IPv6 DB + missing `DATABASE_URL` / `SUPABASE_ACCESS_TOKEN`).
-2. WhatsApp Edge secrets not injected — architecture ready; deploy secrets manually.
-3. Shared Supabase project already contains unrelated CRM/KWOS/Tantu tables — ERP uses `opa_*` prefix; Security uses its own tables from PR #2.
+1. Previous agent run briefly pointed at wrong shared project `ixulyhomqtajenigopai` — **corrected**: that project must not receive OPA migrations.
+2. Correct production project **OPA AIR JET ERP / opa-airjet-erp** Project URL + publishable key still required before Auth/REST verification and SQL Editor apply.
+3. WhatsApp Edge secrets remain Dashboard/Edge-only — never frontend.
 
 ## 15. Manual configuration required
 

@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "db:plan": "node scripts/migration-plan.mjs",
     "db:migrate": "node scripts/apply-migrations.mjs",
+    "supabase:test": "node scripts/supabase-connection-test.mjs",
     "test:security": "tsx scripts/security-smoke.mts",
     "test:rls:profiles": "node scripts/verify-opa-profiles-rls.mjs"
   },

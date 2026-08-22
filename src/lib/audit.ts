@@ -58,7 +58,8 @@ export async function writeAudit(params: {
   };
 
   if (isSupabaseConfigured && supabase) {
-    await supabase.from("audit_logs").insert({
+    // Dedicated Security audit table — never write into shared CRM public.audit_logs
+    await supabase.from("security_audit_logs").insert({
       user_id: row.user_id,
       action: row.action,
       module: row.module,
